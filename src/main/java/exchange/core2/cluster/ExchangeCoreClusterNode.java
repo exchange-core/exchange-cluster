@@ -1,7 +1,6 @@
 package exchange.core2.cluster;
 
 import io.aeron.ChannelUriStringBuilder;
-import io.aeron.CommonContext;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.client.AeronArchive;
@@ -15,8 +14,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.List;
+
+import static java.util.Collections.singletonList;
 
 public class ExchangeCoreClusterNode {
     private static final String LOCALHOST = "localhost";
@@ -47,7 +47,7 @@ public class ExchangeCoreClusterNode {
     }
 
     /* As seen in BasicAuctionClusteredServiceNode in Aeron Samples */
-    static int calculatePort(final int nodeId, final int offset) {
+    public static int calculatePort(final int nodeId, final int offset) {
         return PORT_BASE + (nodeId * PORTS_PER_NODE) + offset;
     }
 
@@ -70,8 +70,7 @@ public class ExchangeCoreClusterNode {
                 .build();
     }
 
-    public static String clusterMembers(final List<String> hostnames)
-    {
+    public static String clusterMembers(final List<String> hostnames) {
         final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < hostnames.size(); i++)
         {
@@ -88,12 +87,11 @@ public class ExchangeCoreClusterNode {
         return sb.toString();
     }
 
-    public void start(final boolean deleteOnStart)
-    {
-        final String aeronDirName = CommonContext.getAeronDirectoryName() + "2";
-        final File baseDir = new File(System.getProperty("user.dir"), "aeron-cluster");
-        log.info("Aeron Dir = {}", aeronDirName);
-        log.info("Cluster Dir = {}", baseDir.getAbsolutePath());
+    public void start(final boolean deleteOnStart) {
+        final String aeronDir = new File(System.getProperty("user.dir"), "aeron-cluster-node-0").getAbsolutePath();
+        final String baseDir = new File(System.getProperty("user.dir"), "aeron-cluster").getAbsolutePath();
+        log.info("Aeron Dir = {}", aeronDir);
+        log.info("Cluster Dir = {}", baseDir);
         mediaDriverContext = new MediaDriver.Context();
         consensusModuleContext = new ConsensusModule.Context();
         archiveContext = new Archive.Context();
@@ -104,7 +102,7 @@ public class ExchangeCoreClusterNode {
 
         mediaDriverContext
                 .threadingMode(ThreadingMode.SHARED)
-                .aeronDirectoryName(aeronDirName)
+                .aeronDirectoryName(aeronDir)
                 .errorHandler(Throwable::printStackTrace)
                 .terminationHook(barrier::signal)
                 .dirDeleteOnShutdown(true)
@@ -113,20 +111,20 @@ public class ExchangeCoreClusterNode {
         archiveContext
                 .recordingEventsEnabled(false)
                 .controlChannel(udpChannel(0, LOCALHOST, ARCHIVE_CONTROL_REQUEST_PORT_OFFSET))
-                .aeronDirectoryName(aeronDirName)
+                .aeronDirectoryName(aeronDir)
                 .threadingMode(ArchiveThreadingMode.SHARED);
 
         aeronArchiveContext
                 .controlRequestChannel(archiveContext.controlChannel())
                 .controlRequestStreamId(archiveContext.controlStreamId())
                 .controlResponseChannel(udpChannel(0, LOCALHOST, ARCHIVE_CONTROL_RESPONSE_PORT_OFFSET))
-                .aeronDirectoryName(aeronDirName);
+                .aeronDirectoryName(aeronDir);
 
         consensusModuleContext
                 .errorHandler(Throwable::printStackTrace)
                 .clusterMemberId(0)
-                .clusterMembers(clusterMembers(Arrays.asList(LOCALHOST)))
-                .aeronDirectoryName(aeronDirName)
+                .clusterMembers(clusterMembers(singletonList(LOCALHOST)))
+                .aeronDirectoryName(aeronDir)
                 .clusterDir(new File(baseDir, "consensus-module"))
                 .ingressChannel("aeron:udp?term-length=64k")
                 .logChannel(logControlChannel(0, LOCALHOST, LOG_CONTROL_PORT_OFFSET))
@@ -134,7 +132,7 @@ public class ExchangeCoreClusterNode {
                 .deleteDirOnStart(deleteOnStart);
 
         serviceContainerContext
-                .aeronDirectoryName(aeronDirName)
+                .aeronDirectoryName(aeronDir)
                 .archiveContext(aeronArchiveContext.clone())
                 .clusterDir(new File(baseDir, "service"))
                 .clusteredService(service)

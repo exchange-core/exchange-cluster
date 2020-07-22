@@ -1,16 +1,13 @@
 package exchange.core2.cluster.utils;
 
-import com.google.common.primitives.Longs;
 import exchange.core2.core.common.L2MarketData;
 import org.agrona.BitUtil;
-import org.agrona.ExpandableDirectByteBuffer;
 import org.agrona.MutableDirectBuffer;
-
-import java.util.Arrays;
 
 import static com.google.common.primitives.Longs.fromByteArray;
 import static com.google.common.primitives.Longs.toByteArray;
 import static java.lang.System.arraycopy;
+import static java.util.Arrays.copyOfRange;
 
 public class SerializationUtils {
     public static void serializeL2MarketData(L2MarketData marketData, MutableDirectBuffer buffer, int offset) {
@@ -107,7 +104,8 @@ public class SerializationUtils {
         long[] longs = new long[bytes.length / 8];
         int currentBytesLength = 0;
         for (int i = 0; i < longs.length; ++i) {
-            longs[i] = fromByteArray(Arrays.copyOfRange(bytes, currentBytesLength, currentBytesLength + 8));
+            byte[] longBytes = copyOfRange(bytes, currentBytesLength, currentBytesLength + 8);
+            longs[i] = fromByteArray(longBytes);
             currentBytesLength += 8;
         }
         return longs;

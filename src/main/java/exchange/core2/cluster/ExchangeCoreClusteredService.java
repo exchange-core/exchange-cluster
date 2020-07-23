@@ -1,11 +1,11 @@
 package exchange.core2.cluster;
 
+import exchange.core2.cluster.translators.ExchangeRequestDecoders;
+import exchange.core2.cluster.translators.ExchangeResponseEncoders;
 import exchange.core2.core.ExchangeApi;
 import exchange.core2.core.ExchangeCore;
-import exchange.core2.core.common.L2MarketData;
-import exchange.core2.core.common.OrderAction;
-import exchange.core2.core.common.OrderType;
-import exchange.core2.core.common.api.*;
+import exchange.core2.core.common.api.ApiCommand;
+import exchange.core2.core.common.cmd.OrderCommand;
 import exchange.core2.core.common.cmd.OrderCommandType;
 import exchange.core2.core.common.config.ExchangeConfiguration;
 import io.aeron.ExclusivePublication;
@@ -23,16 +23,14 @@ import org.agrona.concurrent.IdleStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-
-import static exchange.core2.cluster.utils.SerializationUtils.serializeL2MarketData;
 
 
 public class ExchangeCoreClusteredService implements ClusteredService {
     private final Logger log = LoggerFactory.getLogger(ExchangeCoreClusteredService.class);
 
-    private final MutableDirectBuffer egressMessageBuffer = new ExpandableDirectByteBuffer();
-    private Cluster cluster;
+    private final MutableDirectBuffer egressMessageBuffer = new ExpandableDirectByteBuffer(512);
     private IdleStrategy idleStrategy;
     private final ExchangeCore exchangeCore = ExchangeCore.builder()
             .exchangeConfiguration(ExchangeConfiguration.defaultBuilder().build())
@@ -44,8 +42,7 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
     @Override
     public void onStart(Cluster cluster, Image snapshotImage) {
-        System.out.println("Cluster service started");
-        this.cluster = cluster;
+        log.info("Cluster service started");
         this.idleStrategy = cluster.idleStrategy();
         exchangeCore.startup();
     }
@@ -70,175 +67,44 @@ public class ExchangeCoreClusteredService implements ClusteredService {
             Header header
     ) {
         log.info("Session message: {}", buffer);
-        OrderCommandType orderCommandType = OrderCommandType.fromCode(buffer.getByte(offset));
-        byte responseType = 0;
-        switch (orderCommandType) {
-            case ADD_USER: {
-                // |---byte orderCommandType---|---long userId---|
-                long userId = buffer.getLong(offset + BitUtil.SIZE_OF_BYTE);
-                exchangeApi.submitCommandAsync(ApiAddUser.builder()
-                        .uid(userId)
-                        .build());
 
-                break;
-            }
-            case RESUME_USER: {
-                // |---byte orderCommandType---|---long userId---|
-                long userId = buffer.getLong(offset + BitUtil.SIZE_OF_BYTE);
-                exchangeApi.submitCommandAsync(ApiResumeUser.builder()
-                        .uid(userId)
-                        .build());
+        int currentOffset = offset;
+        long clientSlug = buffer.getLong(currentOffset);
+        currentOffset += BitUtil.SIZE_OF_LONG;
 
-                break;
-            }
-            case SUSPEND_USER: {
-                // |---byte orderCommandType---|---long userId---|
-                long userId = buffer.getLong(offset + BitUtil.SIZE_OF_BYTE);
-                exchangeApi.submitCommandAsync(ApiSuspendUser.builder()
-                        .uid(userId)
-                        .build());
+        OrderCommandType orderCommandType = OrderCommandType.fromCode(buffer.getByte(currentOffset));
+        currentOffset += BitUtil.SIZE_OF_BYTE;
 
-                break;
-            }
-            case BALANCE_ADJUSTMENT: {
-                // |---byte orderCommandType---|---long userId---|---int productCode---|---long amount---|
-                // |---long transactionId---|
-                int userIdOffset = offset + BitUtil.SIZE_OF_BYTE;
-                int productCodeOffset = userIdOffset + BitUtil.SIZE_OF_LONG;
-                int amountOffset = productCodeOffset + BitUtil.SIZE_OF_INT;
-                int transactionIdOffset = amountOffset + BitUtil.SIZE_OF_LONG;
+        ApiCommand exchangeRequest = ExchangeRequestDecoders.decode(orderCommandType, buffer, currentOffset);
 
-                long userId = buffer.getLong(userIdOffset);
-                int productCode = buffer.getInt(productCodeOffset);
-                long amount = buffer.getLong(amountOffset);
-                long transactionId = buffer.getLong(transactionIdOffset);
-                exchangeApi.submitCommandAsync(ApiAdjustUserBalance.builder()
-                        .uid(userId)
-                        .currency(productCode)
-                        .amount(amount)
-                        .transactionId(transactionId)
-                        .build());
-
-                break;
-            }
-            case PLACE_ORDER: {
-                // |---byte orderCommandType---|---long userId---|---long orderId---|---long price---|
-                // |---long size---|---byte orderAction---|---byte orderType---|---int productCode---|
-                int userIdOffset = offset + BitUtil.SIZE_OF_BYTE;
-                int orderIdOffset = userIdOffset + BitUtil.SIZE_OF_LONG;
-                int priceOffset = orderIdOffset + BitUtil.SIZE_OF_LONG;
-                int sizeOffset = priceOffset + BitUtil.SIZE_OF_LONG;
-                int orderActionOffset = sizeOffset + BitUtil.SIZE_OF_LONG;
-                int orderTypeOffset = orderActionOffset + BitUtil.SIZE_OF_BYTE;
-                int productCodeOffset = orderTypeOffset + BitUtil.SIZE_OF_BYTE;
-
-                long userId = buffer.getLong(userIdOffset);
-                long orderId = buffer.getLong(orderIdOffset);
-                long price = buffer.getLong(priceOffset);
-                long size = buffer.getLong(sizeOffset);
-                OrderAction orderAction = OrderAction.of(buffer.getByte(orderActionOffset));
-                OrderType orderType = OrderType.of(buffer.getByte(orderTypeOffset));
-                int productCode = buffer.getInt(productCodeOffset);
-                exchangeApi.submitCommandAsync(ApiPlaceOrder.builder()
-                        .uid(userId)
-                        .orderId(orderId)
-                        .price(price)
-                        .size(size)
-                        .action(orderAction)
-                        .orderType(orderType)
-                        .symbol(productCode)
-                        .build());
-
-                break;
-            }
-            case MOVE_ORDER: {
-                // |---byte orderCommandType---|---long userId---|---long orderId---|--long newPrice---|
-                // |---int productCode---|
-                int userIdOffset = offset + BitUtil.SIZE_OF_BYTE;
-                int orderIdOffset = userIdOffset + BitUtil.SIZE_OF_LONG;
-                int newPriceOffset = orderIdOffset + BitUtil.SIZE_OF_LONG;
-                int productCodeOffset = newPriceOffset + BitUtil.SIZE_OF_LONG;
-
-                long userId = buffer.getLong(userIdOffset);
-                long orderId = buffer.getLong(orderIdOffset);
-                long newPrice = buffer.getLong(newPriceOffset);
-                int productCode = buffer.getInt(productCodeOffset);
-                exchangeApi.submitCommandAsync(ApiMoveOrder.builder()
-                        .uid(userId)
-                        .orderId(orderId)
-                        .newPrice(newPrice)
-                        .symbol(productCode)
-                        .build());
-
-                break;
-            }
-            case REDUCE_ORDER: {
-                // |---byte orderCommandType---|---long userId---|---long orderId---|---long reduceSize---|
-                // |---int productCode---|
-                int userIdOffset = offset + BitUtil.SIZE_OF_BYTE;
-                int orderIdOffset = userIdOffset + BitUtil.SIZE_OF_LONG;
-                int reduceSizeOffset = orderIdOffset + BitUtil.SIZE_OF_LONG;
-                int productCodeOffset = reduceSizeOffset + BitUtil.SIZE_OF_LONG;
-
-                long userId = buffer.getLong(userIdOffset);
-                long orderId = buffer.getLong(orderIdOffset);
-                long reduceSize = buffer.getLong(reduceSizeOffset);
-                int productCode = buffer.getInt(productCodeOffset);
-                exchangeApi.submitCommandAsync(ApiReduceOrder.builder()
-                        .uid(userId)
-                        .orderId(orderId)
-                        .reduceSize(reduceSize)
-                        .symbol(productCode)
-                        .build());
-
-                break;
-            }
-            case CANCEL_ORDER: {
-                // |---byte orderCommandType---|---long userId---|---long orderId---|---int productCode---|
-                int userIdOffset = offset + BitUtil.SIZE_OF_BYTE;
-                int orderIdOffset = userIdOffset + BitUtil.SIZE_OF_LONG;
-                int productCodeOffset = orderIdOffset + BitUtil.SIZE_OF_LONG;
-
-                long userId = buffer.getLong(userIdOffset);
-                long orderId = buffer.getLong(orderIdOffset);
-                int productCode = buffer.getInt(productCodeOffset);
-                exchangeApi.submitCommandAsync(ApiMoveOrder.builder()
-                        .uid(userId)
-                        .orderId(orderId)
-                        .symbol(productCode)
-                        .build());
-
-                break;
-            }
-            case ORDER_BOOK_REQUEST: {
-                // |---byte orderCommandType---|---int productCode---|---int depth---|
-                int productCodeOffset = offset + BitUtil.SIZE_OF_BYTE;
-                int depthOffset = productCodeOffset + BitUtil.SIZE_OF_INT;
-
-                int productCode = buffer.getInt(productCodeOffset);
-                int depth = buffer.getInt(depthOffset);
-
-                responseType = OrderCommandType.ORDER_BOOK_REQUEST.getCode();
-                egressMessageBuffer.putByte(0, responseType);
-                try {
-                    L2MarketData marketData = exchangeApi.requestOrderBookAsync(productCode, depth).get();
-                    serializeL2MarketData(marketData, egressMessageBuffer, BitUtil.SIZE_OF_BYTE);
-                } catch (InterruptedException | ExecutionException e) {
-                    egressMessageBuffer.putByte(0, (byte) 0);
-                    log.error("Exception occurred during L2MarketData serialization", e);
-                }
-
-                break;
-            }
-            default:
-                log.info("Handler for command of type {} has not been implemented yet", orderCommandType);
-                break;
+        if (exchangeRequest == null) {
+            log.info("Translator for OrderCommandType {} has not been implemented yet. Skipping.", orderCommandType);
+            return;
         }
 
-        if (session != null && responseType != 0) {
-            // |---byte responseType---|---byte[] responseBody (variable length)---|
+        if (session != null) {
+            // |---long clientSlug---|---byte responseType---|---int commandResult---|
+            // |---(optional) byte[] responseBody---|
+            CompletableFuture<OrderCommand> responseFuture = exchangeApi.submitCommandAsyncFullResponse(exchangeRequest);
+            OrderCommand exchangeResponse;
+
+            int currentEgressBufferOffset = 0;
+            egressMessageBuffer.putLong(currentEgressBufferOffset, clientSlug);
+            currentEgressBufferOffset += BitUtil.SIZE_OF_LONG;
+
+            egressMessageBuffer.putByte(currentEgressBufferOffset, orderCommandType.getCode());
+            currentEgressBufferOffset += BitUtil.SIZE_OF_BYTE;
+
+            try {
+                exchangeResponse = responseFuture.get();
+            } catch (InterruptedException | ExecutionException e) {
+                log.error("Exception while completing response future occurred. Returning", e);
+                return;
+            }
+
+            ExchangeResponseEncoders.encode(exchangeResponse, egressMessageBuffer, currentEgressBufferOffset);
             log.info("Responding with {}", egressMessageBuffer);
-            while (session.offer(egressMessageBuffer, 0, 8) < 0) {
+            while (session.offer(egressMessageBuffer, 0, 512) < 0) {
                 idleStrategy.idle();
             }
         }
@@ -246,21 +112,21 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
     @Override
     public void onTimerEvent(long correlationId, long timestamp) {
-        System.out.println("In onTimerEvent: " + correlationId + " : " + timestamp);
+        log.info("In onTimerEvent. CorrelationId: {} Timestamp: {}", correlationId, timestamp);
     }
 
     @Override
     public void onTakeSnapshot(ExclusivePublication snapshotPublication) {
-        System.out.println("In onTakeSnapshot: " + snapshotPublication);
+        log.info("In onTakeSnapshot: {}", snapshotPublication);
     }
 
     @Override
     public void onRoleChange(Cluster.Role newRole) {
-        System.out.println("In onRoleChange: " + newRole);
+        log.info("In onRoleChange: {}", newRole);
     }
 
     @Override
     public void onTerminate(Cluster cluster) {
-        System.out.println("In onTerminate: " + cluster);
+        log.info("In onTerminate: {}", cluster);
     }
 }

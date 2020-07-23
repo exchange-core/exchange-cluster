@@ -1,7 +1,6 @@
 package exchange.core2.cluster.client;
 
 import exchange.core2.core.common.cmd.OrderCommandType;
-import io.aeron.CommonContext;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.client.EgressListener;
 import io.aeron.driver.MediaDriver;
@@ -14,39 +13,40 @@ import org.agrona.MutableDirectBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-import static exchange.core2.cluster.ExchangeCoreClusterNode.calculatePort;
+import static exchange.core2.cluster.utils.NetworkUtils.ingressEndpoints;
 import static java.util.Collections.singletonList;
 
 public class ExchangeCoreClusterClient implements EgressListener {
 
     private AeronCluster clusterClient;
-    private final MediaDriver clientMediaDriver;
-    private static final int CLIENT_FACING_PORT_OFFSET = 3;
+    private final AeronCluster.Context clusterContext;
     private final MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
     private final Logger log = LoggerFactory.getLogger(ExchangeCoreClusterClient.class);
+    private final Map<Long, DirectBuffer> responsesMap = new ConcurrentHashMap<>();
 
-    public ExchangeCoreClusterClient(String aeronDirName) {
-        this.clientMediaDriver = MediaDriver.launch(
+    public ExchangeCoreClusterClient(String aeronDirName, String ingressHost, String egressHost, int egressPort) {
+        MediaDriver clientMediaDriver = MediaDriver.launch(
                 new MediaDriver.Context()
                         .threadingMode(ThreadingMode.SHARED)
                         .dirDeleteOnStart(false)
                         .errorHandler(Throwable::printStackTrace)
                         .aeronDirectoryName(aeronDirName)
         );
+
+        String egressChannelEndpoint = egressHost + ":" + egressPort;
+        this.clusterContext =  new AeronCluster.Context()
+                .egressListener(this)
+                .egressChannel("aeron:udp?endpoint=" + egressChannelEndpoint)
+                .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
+                .ingressChannel("aeron:udp")
+                .ingressEndpoints(ingressEndpoints(singletonList(ingressHost)));
     }
 
-    public void connectToCluster(String ingressHost, String egressHost, int egressPort) {
-        String egressChannelEndpoint = egressHost + ":" + egressPort;
-        this.clusterClient = AeronCluster.connect(
-                new AeronCluster.Context()
-                        .egressListener(this)
-                        .egressChannel("aeron:udp?endpoint=" + egressChannelEndpoint)
-                        .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
-                        .ingressChannel("aeron:udp")
-                        .ingressEndpoints(ingressEndpoints(singletonList(ingressHost))));
+    public void connectToCluster() {
+        this.clusterClient = AeronCluster.connect(clusterContext);
     }
 
     public void pollEgress() {
@@ -62,41 +62,33 @@ public class ExchangeCoreClusterClient implements EgressListener {
             int length,
             Header header
     ) {
+        long slug = buffer.getLong(offset);
+        responsesMap.put(slug, buffer);
         log.info("Client message received: {}", buffer);
     }
 
-    private void sendCreateUserRequest(long uid) {
-        requestBuffer.putByte(0, OrderCommandType.ADD_USER.getCode());
-        requestBuffer.putLong(BitUtil.SIZE_OF_BYTE, uid);
+    protected DirectBuffer sendCreateUserRequest(long uid) {
+        int currentOffset = 0;
+
+        long slug = System.nanoTime();
+        requestBuffer.putLong(currentOffset, slug);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.ADD_USER.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putLong(currentOffset, uid);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
         log.info("Sending create user request: {}", requestBuffer);
-        clusterClient.offer(requestBuffer, 0, BitUtil.SIZE_OF_BYTE + BitUtil.SIZE_OF_LONG);
-    }
+        clusterClient.offer(requestBuffer, 0, currentOffset);
 
-    public static String ingressEndpoints(final List<String> hostnames) {
-        final StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < hostnames.size(); i++)  {
-            sb.append(i).append('=');
-            sb.append(hostnames.get(i)).append(':').append(calculatePort(i, CLIENT_FACING_PORT_OFFSET));
-            sb.append(',');
+        DirectBuffer exchangeResponseBuffer;
+        while(true) {
+            exchangeResponseBuffer = responsesMap.get(slug);
+            if (exchangeResponseBuffer != null) {
+                return exchangeResponseBuffer;
+            }
         }
-
-        sb.setLength(sb.length() - 1);
-        return sb.toString();
-    }
-
-    public static void main(String[] args) {
-        final String aeronDirName = new File(System.getProperty("user.dir"), "aeron-cluster-client").getAbsolutePath();
-        final String LOCALHOST = "localhost";
-        final int egressPort = 19001;  // change for different clients
-
-        ExchangeCoreClusterClient clusterClient = new ExchangeCoreClusterClient(aeronDirName);
-        clusterClient.connectToCluster(LOCALHOST, LOCALHOST, egressPort);
-
-        new Thread(() -> {
-            while (true) clusterClient.pollEgress();
-        }).start();
-
-        clusterClient.sendCreateUserRequest(101);
-        clusterClient.sendCreateUserRequest( 201);
     }
 }

@@ -1,6 +1,7 @@
-package exchange.core2.cluster.client;
+package exchange.core2.cluster.example;
 
 
+import exchange.core2.cluster.client.ExchangeCoreClusterClient;
 import org.agrona.DirectBuffer;
 
 import java.io.File;
@@ -26,7 +27,7 @@ public class SampleExchangeCoreClusterClient extends ExchangeCoreClusterClient {
             while (true) clusterClient.pollEgress();
         }).start();
 
-        DirectBuffer buffer = clusterClient.sendCreateUserRequest(101);
-        System.out.println("HTTP client received buffer: " + buffer);
+//        DirectBuffer buffer = clusterClient.sendCreateUserRequest(101);
+//        System.out.println("HTTP client received buffer: " + buffer);
     }
 }

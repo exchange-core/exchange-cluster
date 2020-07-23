@@ -1,7 +1,7 @@
 package exchange.core2.cluster;
 
-import exchange.core2.cluster.translators.ExchangeRequestDecoders;
-import exchange.core2.cluster.translators.ExchangeResponseEncoders;
+import exchange.core2.cluster.handlers.ExchangeRequestDecoders;
+import exchange.core2.cluster.handlers.ExchangeResponseEncoders;
 import exchange.core2.core.ExchangeApi;
 import exchange.core2.core.ExchangeCore;
 import exchange.core2.core.common.api.ApiCommand;

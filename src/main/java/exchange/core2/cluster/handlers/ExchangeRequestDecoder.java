@@ -1,4 +1,4 @@
-package exchange.core2.cluster.translators;
+package exchange.core2.cluster.handlers;
 
 import exchange.core2.core.common.api.ApiCommand;
 import org.agrona.DirectBuffer;

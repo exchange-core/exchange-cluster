@@ -1,4 +1,4 @@
-package exchange.core2.cluster.translators;
+package exchange.core2.cluster.handlers;
 
 import exchange.core2.core.common.cmd.CommandResultCode;
 import exchange.core2.core.common.cmd.OrderCommand;
@@ -19,9 +19,9 @@ public class ExchangeResponseEncoders {
 
     public static void encode(OrderCommand exchangeResponse, MutableDirectBuffer buffer, int offset) {
         int currentOffset = encodeResultCode(exchangeResponse.resultCode, buffer, offset);
-        ExchangeResponseEncoder responseTranslator = exchangeResponseEncoders.get(exchangeResponse.command);
-        if (responseTranslator != null) {
-            responseTranslator.encode(exchangeResponse, buffer, currentOffset);
+        ExchangeResponseEncoder responseEncoder = exchangeResponseEncoders.get(exchangeResponse.command);
+        if (responseEncoder != null) {
+            responseEncoder.encode(exchangeResponse, buffer, currentOffset);
         }
     }
 

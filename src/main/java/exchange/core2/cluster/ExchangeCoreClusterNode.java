@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.concurrent.TimeUnit;
 
 import static exchange.core2.cluster.utils.NetworkUtils.*;
 import static java.util.Collections.singletonList;
@@ -47,6 +48,7 @@ public class ExchangeCoreClusterNode {
     }
 
     public void start(final boolean deleteOnStart) {
+        //TODO: Configurify
         final String aeronDir = new File(System.getProperty("user.dir"), "aeron-cluster-node-0").getAbsolutePath();
         final String baseDir = new File(System.getProperty("user.dir"), "aeron-cluster").getAbsolutePath();
         log.info("Aeron Dir = {}", aeronDir);
@@ -81,6 +83,7 @@ public class ExchangeCoreClusterNode {
                 .aeronDirectoryName(aeronDir);
 
         consensusModuleContext
+                .sessionTimeoutNs(TimeUnit.SECONDS.toNanos(3600))
                 .errorHandler(Throwable::printStackTrace)
                 .clusterMemberId(0)
                 .clusterMembers(clusterMembers(singletonList(LOCALHOST)))

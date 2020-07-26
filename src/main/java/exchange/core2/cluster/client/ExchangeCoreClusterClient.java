@@ -1,5 +1,7 @@
 package exchange.core2.cluster.client;
 
+import exchange.core2.core.common.OrderAction;
+import exchange.core2.core.common.OrderType;
 import exchange.core2.core.common.cmd.OrderCommandType;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.client.EgressListener;
@@ -10,22 +12,25 @@ import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.ExpandableDirectByteBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.agrona.concurrent.BackoffIdleStrategy;
+import org.agrona.concurrent.IdleStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static exchange.core2.cluster.utils.NetworkUtils.ingressEndpoints;
 import static java.util.Collections.singletonList;
 
 public class ExchangeCoreClusterClient implements EgressListener {
 
-    private AeronCluster clusterClient;
+    private AeronCluster aeronCluster;
     private final AeronCluster.Context clusterContext;
+    private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
     private final MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
     private final Logger log = LoggerFactory.getLogger(ExchangeCoreClusterClient.class);
-    private final Map<Long, DirectBuffer> responsesMap = new ConcurrentHashMap<>();
+    private final Map<Long, DirectBuffer> responsesMap = new HashMap<>();
 
     public ExchangeCoreClusterClient(String aeronDirName, String ingressHost, String egressHost, int egressPort) {
         MediaDriver clientMediaDriver = MediaDriver.launch(
@@ -46,11 +51,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     public void connectToCluster() {
-        this.clusterClient = AeronCluster.connect(clusterContext);
-    }
-
-    public void pollEgress() {
-        clusterClient.pollEgress();
+        this.aeronCluster = AeronCluster.connect(clusterContext);
     }
 
     @Override
@@ -62,16 +63,28 @@ public class ExchangeCoreClusterClient implements EgressListener {
             int length,
             Header header
     ) {
-        long slug = buffer.getLong(offset);
-        responsesMap.put(slug, buffer);
-        log.info("Client message received: {}", buffer);
+        log.info("Client received message: {}", buffer);
+        long clientMessageId = buffer.getLong(offset);
+        responsesMap.put(clientMessageId, buffer);
     }
 
-    protected DirectBuffer sendCreateUserRequest(long uid) {
+
+    private DirectBuffer fetchExchangeResponse(long clientMessageId) {
+        DirectBuffer exchangeResponseBuffer;
+        while (true) {
+            aeronCluster.pollEgress();
+            exchangeResponseBuffer = responsesMap.remove(clientMessageId);
+            if (exchangeResponseBuffer != null) {
+                return exchangeResponseBuffer;
+            }
+        }
+    }
+
+    protected DirectBuffer sendAddUserRequest(long uid) {
         int currentOffset = 0;
 
-        long slug = System.nanoTime();
-        requestBuffer.putLong(currentOffset, slug);
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
         currentOffset += BitUtil.SIZE_OF_LONG;
 
         requestBuffer.putByte(currentOffset, OrderCommandType.ADD_USER.getCode());
@@ -80,15 +93,250 @@ public class ExchangeCoreClusterClient implements EgressListener {
         requestBuffer.putLong(currentOffset, uid);
         currentOffset += BitUtil.SIZE_OF_LONG;
 
-        log.info("Sending create user request: {}", requestBuffer);
-        clusterClient.offer(requestBuffer, 0, currentOffset);
+        log.info("Sending add user request: {}", requestBuffer);
 
-        DirectBuffer exchangeResponseBuffer;
-        while(true) {
-            exchangeResponseBuffer = responsesMap.get(slug);
-            if (exchangeResponseBuffer != null) {
-                return exchangeResponseBuffer;
-            }
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
         }
+
+        return fetchExchangeResponse(clientMessageId);
+    }
+
+    protected DirectBuffer sendResumeUserRequest(long uid) {
+        int currentOffset = 0;
+
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.RESUME_USER.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putLong(currentOffset, uid);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        log.info("Sending resume user request: {}", requestBuffer);
+
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
+        }
+
+        return fetchExchangeResponse(clientMessageId);
+    }
+
+    protected DirectBuffer sendSuspendUserRequest(long uid) {
+        int currentOffset = 0;
+
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.SUSPEND_USER.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putLong(currentOffset, uid);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        log.info("Sending suspend user request: {}", requestBuffer);
+
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
+        }
+
+        return fetchExchangeResponse(clientMessageId);
+    }
+
+    protected DirectBuffer sendBalanceAdjustmentRequest(long uid, int currency, long amount, long transactionId) {
+        int currentOffset = 0;
+
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.BALANCE_ADJUSTMENT.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putLong(currentOffset, uid);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putInt(currentOffset, currency);
+        currentOffset += BitUtil.SIZE_OF_INT;
+
+        requestBuffer.putLong(currentOffset, amount);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, transactionId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        log.info("Sending balance adjustment request: {}", requestBuffer);
+
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
+        }
+
+        return fetchExchangeResponse(clientMessageId);
+    }
+
+    protected DirectBuffer sendPlaceOrderRequest(
+            long uid,
+            long orderId,
+            long price,
+            long size,
+            OrderAction orderAction,
+            OrderType orderType,
+            int symbol
+    ) {
+        int currentOffset = 0;
+
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.PLACE_ORDER.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putLong(currentOffset, uid);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, orderId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, price);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, size);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, orderAction.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putByte(currentOffset, orderType.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putInt(currentOffset, symbol);
+        currentOffset += BitUtil.SIZE_OF_INT;
+
+        log.info("Sending place order request: {}", requestBuffer);
+
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
+        }
+
+        return fetchExchangeResponse(clientMessageId);
+    }
+
+    protected DirectBuffer sendMoveOrderRequest(long uid, long orderId, long newPrice, int symbol) {
+        int currentOffset = 0;
+
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.MOVE_ORDER.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putLong(currentOffset, uid);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, orderId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, newPrice);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putInt(currentOffset, symbol);
+        currentOffset += BitUtil.SIZE_OF_INT;
+
+        log.info("Sending move order request: {}", requestBuffer);
+
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
+        }
+
+        return fetchExchangeResponse(clientMessageId);
+    }
+
+    protected DirectBuffer sendReduceOrderRequest(long uid, long orderId, long reduceSize, int symbol) {
+        int currentOffset = 0;
+
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.REDUCE_ORDER.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putLong(currentOffset, uid);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, orderId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, reduceSize);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putInt(currentOffset, symbol);
+        currentOffset += BitUtil.SIZE_OF_INT;
+
+        log.info("Sending reduce order request: {}", requestBuffer);
+
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
+        }
+
+        return fetchExchangeResponse(clientMessageId);
+    }
+
+    protected DirectBuffer sendCancelOrderRequest(long uid, long orderId, int symbol) {
+        int currentOffset = 0;
+
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.CANCEL_ORDER.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putLong(currentOffset, uid);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putLong(currentOffset, orderId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putInt(currentOffset, symbol);
+        currentOffset += BitUtil.SIZE_OF_INT;
+
+        log.info("Sending cancel order request: {}", requestBuffer);
+
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
+        }
+
+        return fetchExchangeResponse(clientMessageId);
+    }
+
+    protected DirectBuffer sendOrderBookRequest(int symbol, int depth) {
+        int currentOffset = 0;
+
+        long clientMessageId = System.nanoTime();
+        requestBuffer.putLong(currentOffset, clientMessageId);
+        currentOffset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(currentOffset, OrderCommandType.ORDER_BOOK_REQUEST.getCode());
+        currentOffset += BitUtil.SIZE_OF_BYTE;
+
+        requestBuffer.putInt(currentOffset, symbol);
+        currentOffset += BitUtil.SIZE_OF_INT;
+
+        requestBuffer.putInt(currentOffset, depth);
+        currentOffset += BitUtil.SIZE_OF_INT;
+
+        log.info("Sending cancel order request: {}", requestBuffer);
+
+        while (aeronCluster.offer(requestBuffer, 0, currentOffset) < 0) {
+            idleStrategy.idle(aeronCluster.pollEgress());
+        }
+
+        return fetchExchangeResponse(clientMessageId);
     }
 }

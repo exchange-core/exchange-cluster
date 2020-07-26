@@ -20,133 +20,133 @@ public class ExchangeRequestDecoders {
     }
 
     static ExchangeRequestDecoder addUserRequestDecoder = ((buffer, offset) -> {
-        // |---byte orderCommandType---|---long userId---|
-        long userId = buffer.getLong(offset);
+        // |---byte orderCommandType---|---long uid---|
+        long uid = buffer.getLong(offset);
 
         return ApiAddUser.builder()
-                .uid(userId)
+                .uid(uid)
                 .build();
     });
 
     static ExchangeRequestDecoder resumeUserRequestDecoder = ((buffer, offset) -> {
-        // |---byte orderCommandType---|---long userId---|
-        long userId = buffer.getLong(offset);
+        // |---byte orderCommandType---|---long uid---|
+        long uid = buffer.getLong(offset);
 
         return ApiResumeUser.builder()
-                .uid(userId)
+                .uid(uid)
                 .build();
     });
 
     static ExchangeRequestDecoder suspendUserRequestDecoder = ((buffer, offset) -> {
-        // |---byte orderCommandType---|---long userId---|
-        long userId = buffer.getLong(offset);
+        // |---byte orderCommandType---|---long uid---|
+        long uid = buffer.getLong(offset);
 
         return ApiSuspendUser.builder()
-                .uid(userId)
+                .uid(uid)
                 .build();
     });
 
 
     static ExchangeRequestDecoder balanceAdjustmentRequestDecoder = ((buffer, offset) -> {
-        // |---byte orderCommandType---|---long userId---|---int productCode---|---long amount---|
+        // |---byte orderCommandType---|---long uid---|---int productCode---|---long amount---|
         // |---long transactionId---|
         int currencyOffset = offset + BitUtil.SIZE_OF_LONG;
         int amountOffset = currencyOffset + BitUtil.SIZE_OF_INT;
         int transactionIdOffset = amountOffset + BitUtil.SIZE_OF_LONG;
 
-        long userId = buffer.getLong(offset);
-        int currencyCode = buffer.getInt(currencyOffset);
+        long uid = buffer.getLong(offset);
+        int currency = buffer.getInt(currencyOffset);
         long amount = buffer.getLong(amountOffset);
         long transactionId = buffer.getLong(transactionIdOffset);
 
         return ApiAdjustUserBalance.builder()
-                .uid(userId)
-                .currency(currencyCode)
+                .uid(uid)
+                .currency(currency)
                 .amount(amount)
                 .transactionId(transactionId)
                 .build();
     });
 
     static ExchangeRequestDecoder placeOrderRequestDecoder = ((buffer, offset) -> {
-        // |---byte orderCommandType---|---long userId---|---long orderId---|---long price---|
+        // |---byte orderCommandType---|---long uid---|---long orderId---|---long price---|
         // |---long size---|---byte orderAction---|---byte orderType---|---int productCode---|
         int orderIdOffset = offset + BitUtil.SIZE_OF_LONG;
         int priceOffset = orderIdOffset + BitUtil.SIZE_OF_LONG;
         int sizeOffset = priceOffset + BitUtil.SIZE_OF_LONG;
         int orderActionOffset = sizeOffset + BitUtil.SIZE_OF_LONG;
         int orderTypeOffset = orderActionOffset + BitUtil.SIZE_OF_BYTE;
-        int symbolCodeOffset = orderTypeOffset + BitUtil.SIZE_OF_BYTE;
+        int symbolOffset = orderTypeOffset + BitUtil.SIZE_OF_BYTE;
 
-        long userId = buffer.getLong(offset);
+        long uid = buffer.getLong(offset);
         long orderId = buffer.getLong(orderIdOffset);
         long price = buffer.getLong(priceOffset);
         long size = buffer.getLong(sizeOffset);
         OrderAction orderAction = OrderAction.of(buffer.getByte(orderActionOffset));
         OrderType orderType = OrderType.of(buffer.getByte(orderTypeOffset));
-        int symbolCode = buffer.getInt(symbolCodeOffset);
+        int symbol = buffer.getInt(symbolOffset);
 
         return ApiPlaceOrder.builder()
-                .uid(userId)
+                .uid(uid)
                 .orderId(orderId)
                 .price(price)
                 .size(size)
                 .action(orderAction)
                 .orderType(orderType)
-                .symbol(symbolCode)
+                .symbol(symbol)
                 .build();
     });
 
     static ExchangeRequestDecoder moveOrderRequestDecoder = ((buffer, offset) -> {
-        // |---byte orderCommandType---|---long userId---|---long orderId---|--long newPrice---|
+        // |---byte orderCommandType---|---long uid---|---long orderId---|---long newPrice---|
         // |---int productCode---|
         int orderIdOffset = offset + BitUtil.SIZE_OF_LONG;
         int newPriceOffset = orderIdOffset + BitUtil.SIZE_OF_LONG;
-        int productCodeOffset = newPriceOffset + BitUtil.SIZE_OF_LONG;
+        int symbolOffset = newPriceOffset + BitUtil.SIZE_OF_LONG;
 
-        long userId = buffer.getLong(offset);
+        long uid = buffer.getLong(offset);
         long orderId = buffer.getLong(orderIdOffset);
         long newPrice = buffer.getLong(newPriceOffset);
-        int productCode = buffer.getInt(productCodeOffset);
+        int symbol = buffer.getInt(symbolOffset);
 
         return ApiMoveOrder.builder()
-                .uid(userId)
+                .uid(uid)
                 .orderId(orderId)
                 .newPrice(newPrice)
-                .symbol(productCode)
+                .symbol(symbol)
                 .build();
     });
 
     static ExchangeRequestDecoder reduceOrderRequestDecoder = ((buffer, offset) -> {
-        // |---byte orderCommandType---|---long userId---|---long orderId---|---long reduceSize---|
+        // |---byte orderCommandType---|---long uid---|---long orderId---|---long reduceSize---|
         // |---int productCode---|
         int orderIdOffset = offset + BitUtil.SIZE_OF_LONG;
         int reduceSizeOffset = orderIdOffset + BitUtil.SIZE_OF_LONG;
-        int symbolCodeOffset = reduceSizeOffset + BitUtil.SIZE_OF_LONG;
+        int symbolOffset = reduceSizeOffset + BitUtil.SIZE_OF_LONG;
 
-        long userId = buffer.getLong(offset);
+        long uid = buffer.getLong(offset);
         long orderId = buffer.getLong(orderIdOffset);
         long reduceSize = buffer.getLong(reduceSizeOffset);
-        int symbolCode = buffer.getInt(symbolCodeOffset);
+        int symbol = buffer.getInt(symbolOffset);
 
         return ApiReduceOrder.builder()
-                .uid(userId)
+                .uid(uid)
                 .orderId(orderId)
                 .reduceSize(reduceSize)
-                .symbol(symbolCode)
+                .symbol(symbol)
                 .build();
     });
 
     static ExchangeRequestDecoder cancelOrderRequestDecoder = ((buffer, offset) -> {
-        // |---byte orderCommandType---|---long userId---|---long orderId---|---int productCode---|
+        // |---byte orderCommandType---|---long uid---|---long orderId---|---int productCode---|
         int orderIdOffset = offset + BitUtil.SIZE_OF_LONG;
         int symbolCodeOffset = orderIdOffset + BitUtil.SIZE_OF_LONG;
 
-        long userId = buffer.getLong(offset);
+        long uid = buffer.getLong(offset);
         long orderId = buffer.getLong(orderIdOffset);
         int symbolCode = buffer.getInt(symbolCodeOffset);
 
         return ApiCancelOrder.builder()
-                .uid(userId)
+                .uid(uid)
                 .orderId(orderId)
                 .symbol(symbolCode)
                 .build();

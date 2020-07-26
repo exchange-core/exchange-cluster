@@ -17,4 +17,5 @@ dependencies {
     compile group: 'exchange.core2', name: 'exchange-core', version: '0.5.3'
     compile group: 'org.projectlombok', name: 'lombok', version: '1.18.12'
     compile group: 'com.google.guava', name: 'guava', version: '29.0-jre'
+    compile group: 'com.sparkjava', name: 'spark-core', version: '2.9.2'
 }

@@ -39,7 +39,6 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
     private final ExchangeApi exchangeApi = exchangeCore.getApi();
 
-
     @Override
     public void onStart(Cluster cluster, Image snapshotImage) {
         log.info("Cluster service started");
@@ -49,12 +48,12 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
     @Override
     public void onSessionOpen(ClientSession session, long timestamp) {
-
+        log.info("Session {} opened at {}", session, timestamp);
     }
 
     @Override
     public void onSessionClose(ClientSession session, long timestamp, CloseReason closeReason) {
-
+        log.info("Session {} closed at {} of {}", session, timestamp, closeReason);
     }
 
     @Override
@@ -69,7 +68,7 @@ public class ExchangeCoreClusteredService implements ClusteredService {
         log.info("Session message: {}", buffer);
 
         int currentOffset = offset;
-        long clientSlug = buffer.getLong(currentOffset);
+        long clientMessageId = buffer.getLong(currentOffset);
         currentOffset += BitUtil.SIZE_OF_LONG;
 
         OrderCommandType orderCommandType = OrderCommandType.fromCode(buffer.getByte(currentOffset));
@@ -83,13 +82,13 @@ public class ExchangeCoreClusteredService implements ClusteredService {
         }
 
         if (session != null) {
-            // |---long clientSlug---|---byte responseType---|---int commandResult---|
+            // |---long clientMessageId---|---byte responseType---|---int commandResult---|
             // |---(optional) byte[] responseBody---|
             CompletableFuture<OrderCommand> responseFuture = exchangeApi.submitCommandAsyncFullResponse(exchangeRequest);
             OrderCommand exchangeResponse;
 
             int currentEgressBufferOffset = 0;
-            egressMessageBuffer.putLong(currentEgressBufferOffset, clientSlug);
+            egressMessageBuffer.putLong(currentEgressBufferOffset, clientMessageId);
             currentEgressBufferOffset += BitUtil.SIZE_OF_LONG;
 
             egressMessageBuffer.putByte(currentEgressBufferOffset, orderCommandType.getCode());

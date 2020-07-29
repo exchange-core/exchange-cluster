@@ -28,7 +28,6 @@ public class ExchangeCoreClusterClient implements EgressListener {
     private AeronCluster aeronCluster;
     private final AeronCluster.Context clusterContext;
     private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
-    private final MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
     private final Logger log = LoggerFactory.getLogger(ExchangeCoreClusterClient.class);
     private final Map<Long, DirectBuffer> responsesMap = new HashMap<>();
 
@@ -81,6 +80,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     protected DirectBuffer sendAddUserRequest(long uid) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();
@@ -103,6 +103,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     protected DirectBuffer sendResumeUserRequest(long uid) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();
@@ -125,6 +126,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     protected DirectBuffer sendSuspendUserRequest(long uid) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();
@@ -147,6 +149,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     protected DirectBuffer sendBalanceAdjustmentRequest(long uid, int currency, long amount, long transactionId) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();
@@ -186,6 +189,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
             OrderType orderType,
             int symbol
     ) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();
@@ -226,6 +230,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     protected DirectBuffer sendMoveOrderRequest(long uid, long orderId, long newPrice, int symbol) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();
@@ -257,6 +262,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     protected DirectBuffer sendReduceOrderRequest(long uid, long orderId, long reduceSize, int symbol) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();
@@ -288,6 +294,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     protected DirectBuffer sendCancelOrderRequest(long uid, long orderId, int symbol) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();
@@ -316,6 +323,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     protected DirectBuffer sendOrderBookRequest(int symbol, int depth) {
+        MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;
 
         long clientMessageId = System.nanoTime();

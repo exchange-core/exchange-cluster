@@ -15,9 +15,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static exchange.core2.cluster.utils.NetworkUtils.*;
-import static java.util.Collections.singletonList;
+import static java.util.stream.Collectors.toList;
 
 public class ExchangeCoreClusterNode {
 
@@ -47,9 +48,8 @@ public class ExchangeCoreClusterNode {
                 .build();
     }
 
-    public void start(final boolean deleteOnStart) {
-        //TODO: Configurify
-        final String aeronDir = new File(System.getProperty("user.dir"), "aeron-cluster-node-0").getAbsolutePath();
+    public void start(final int nodeId, final int nNodes, final boolean deleteOnStart) {
+        final String aeronDir = new File(System.getProperty("user.dir"), "aeron-cluster-node-" + nodeId).getAbsolutePath();
         final String baseDir = new File(System.getProperty("user.dir"), "aeron-cluster").getAbsolutePath();
         log.info("Aeron Dir = {}", aeronDir);
         log.info("Cluster Dir = {}", baseDir);
@@ -72,25 +72,25 @@ public class ExchangeCoreClusterNode {
 
         archiveContext
                 .recordingEventsEnabled(false)
-                .controlChannel(udpChannel(0, LOCALHOST, ARCHIVE_CONTROL_REQUEST_PORT_OFFSET))
+                .controlChannel(udpChannel(nodeId, LOCALHOST, ARCHIVE_CONTROL_REQUEST_PORT_OFFSET))
                 .aeronDirectoryName(aeronDir)
                 .threadingMode(ArchiveThreadingMode.SHARED);
 
         aeronArchiveContext
                 .controlRequestChannel(archiveContext.controlChannel())
                 .controlRequestStreamId(archiveContext.controlStreamId())
-                .controlResponseChannel(udpChannel(0, LOCALHOST, ARCHIVE_CONTROL_RESPONSE_PORT_OFFSET))
+                .controlResponseChannel(udpChannel(nodeId, LOCALHOST, ARCHIVE_CONTROL_RESPONSE_PORT_OFFSET))
                 .aeronDirectoryName(aeronDir);
 
         consensusModuleContext
                 .sessionTimeoutNs(TimeUnit.SECONDS.toNanos(3600))
                 .errorHandler(Throwable::printStackTrace)
-                .clusterMemberId(0)
-                .clusterMembers(clusterMembers(singletonList(LOCALHOST)))
+                .clusterMemberId(nodeId)
+                .clusterMembers(clusterMembers(IntStream.range(0, nNodes).mapToObj(i -> LOCALHOST).collect(toList())))
                 .aeronDirectoryName(aeronDir)
                 .clusterDir(new File(baseDir, "consensus-module"))
                 .ingressChannel("aeron:udp?term-length=64k")
-                .logChannel(logControlChannel(0, LOCALHOST, LOG_CONTROL_PORT_OFFSET))
+                .logChannel(logControlChannel(nodeId, LOCALHOST, LOG_CONTROL_PORT_OFFSET))
                 .archiveContext(aeronArchiveContext.clone())
                 .deleteDirOnStart(deleteOnStart);
 

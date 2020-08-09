@@ -14,7 +14,7 @@ public class SampleExchangeCoreClusterClient extends ExchangeCoreClusterClient {
     private static final Logger log = LoggerFactory.getLogger(SampleExchangeCoreClusterClient.class);
 
     public SampleExchangeCoreClusterClient(String aeronDirName, String ingressHost, String egressHost, int egressPort) {
-        super(aeronDirName, ingressHost, egressHost, egressPort);
+        super(aeronDirName, ingressHost, egressHost, egressPort, true);
     }
 
     private void registerRoutes() {

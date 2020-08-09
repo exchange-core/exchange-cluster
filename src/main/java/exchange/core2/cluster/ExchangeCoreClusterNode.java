@@ -8,7 +8,9 @@ import io.aeron.cluster.ClusteredMediaDriver;
 import io.aeron.cluster.ConsensusModule;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.MediaDriver;
+import io.aeron.driver.MinMulticastFlowControlSupplier;
 import io.aeron.driver.ThreadingMode;
+import org.agrona.concurrent.NoOpLock;
 import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,8 +51,12 @@ public class ExchangeCoreClusterNode {
     }
 
     public void start(final int nodeId, final int nNodes, final boolean deleteOnStart) {
-        final String aeronDir = new File(System.getProperty("user.dir"), "aeron-cluster-node-" + nodeId).getAbsolutePath();
-        final String baseDir = new File(System.getProperty("user.dir"), "aeron-cluster").getAbsolutePath();
+        final String aeronDir = new File(System.getProperty("user.dir"), "aeron-cluster-node-" + nodeId)
+                .getAbsolutePath();
+
+        final String baseDir = new File(System.getProperty("user.dir"), "aeron-cluster-driver-" + nodeId)
+                .getAbsolutePath();
+
         log.info("Aeron Dir = {}", aeronDir);
         log.info("Cluster Dir = {}", baseDir);
 
@@ -63,20 +69,22 @@ public class ExchangeCoreClusterNode {
         ExchangeCoreClusteredService service = new ExchangeCoreClusteredService();
 
         mediaDriverContext
-                .threadingMode(ThreadingMode.SHARED)
                 .aeronDirectoryName(aeronDir)
-                .errorHandler(Throwable::printStackTrace)
+                .threadingMode(ThreadingMode.SHARED)
+                .termBufferSparseFile(true)
+                .multicastFlowControlSupplier(new MinMulticastFlowControlSupplier())
                 .terminationHook(barrier::signal)
-                .dirDeleteOnShutdown(true)
-                .dirDeleteOnStart(true);
+                .dirDeleteOnStart(deleteOnStart);
 
         archiveContext
-                .recordingEventsEnabled(false)
+                .archiveDir(new File(baseDir, "archive"))
                 .controlChannel(udpChannel(nodeId, LOCALHOST, ARCHIVE_CONTROL_REQUEST_PORT_OFFSET))
-                .aeronDirectoryName(aeronDir)
+                .localControlChannel("aeron:ipc?term-length=64k")
+                .recordingEventsEnabled(false)
                 .threadingMode(ArchiveThreadingMode.SHARED);
 
         aeronArchiveContext
+                .lock(NoOpLock.INSTANCE)
                 .controlRequestChannel(archiveContext.controlChannel())
                 .controlRequestStreamId(archiveContext.controlStreamId())
                 .controlResponseChannel(udpChannel(nodeId, LOCALHOST, ARCHIVE_CONTROL_RESPONSE_PORT_OFFSET))

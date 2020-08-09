@@ -19,9 +19,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import static exchange.core2.cluster.utils.NetworkUtils.ingressEndpoints;
-import static java.util.Collections.singletonList;
+import static java.util.stream.Collectors.toList;
 
 public class ExchangeCoreClusterClient implements EgressListener {
 
@@ -31,11 +32,17 @@ public class ExchangeCoreClusterClient implements EgressListener {
     private final Logger log = LoggerFactory.getLogger(ExchangeCoreClusterClient.class);
     private final Map<Long, DirectBuffer> responsesMap = new HashMap<>();
 
-    public ExchangeCoreClusterClient(String aeronDirName, String ingressHost, String egressHost, int egressPort) {
-        MediaDriver clientMediaDriver = MediaDriver.launch(
+    public ExchangeCoreClusterClient(
+            String aeronDirName,
+            String ingressHost,
+            String egressHost,
+            int egressPort,
+            boolean deleteOnStart
+    ) {
+        MediaDriver clientMediaDriver = MediaDriver.launchEmbedded(
                 new MediaDriver.Context()
                         .threadingMode(ThreadingMode.SHARED)
-                        .dirDeleteOnStart(false)
+                        .dirDeleteOnStart(deleteOnStart)
                         .errorHandler(Throwable::printStackTrace)
                         .aeronDirectoryName(aeronDirName)
         );
@@ -46,7 +53,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
                 .egressChannel("aeron:udp?endpoint=" + egressChannelEndpoint)
                 .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
                 .ingressChannel("aeron:udp")
-                .ingressEndpoints(ingressEndpoints(singletonList(ingressHost)));
+                .ingressEndpoints(ingressEndpoints(IntStream.range(0, 3).mapToObj(i -> ingressHost).collect(toList())));
     }
 
     public void connectToCluster() {

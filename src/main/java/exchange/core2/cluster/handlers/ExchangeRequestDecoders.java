@@ -7,13 +7,14 @@ import exchange.core2.core.common.cmd.OrderCommandType;
 import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static exchange.core2.core.common.cmd.OrderCommandType.*;
 
 public class ExchangeRequestDecoders {
-    static Map<OrderCommandType, ExchangeRequestDecoder> exchangeRequestDecoders = new ConcurrentHashMap<>();
+    // TODO: switch - no need for a map
+    static Map<OrderCommandType, ExchangeRequestDecoder> exchangeRequestDecoders = new HashMap<>();
 
     public static ApiCommand decode(OrderCommandType cmdType, DirectBuffer buffer, int offset) {
         return exchangeRequestDecoders.get(cmdType).decode(buffer, offset);

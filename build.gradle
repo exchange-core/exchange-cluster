@@ -20,8 +20,8 @@ dependencies {
     compile group: 'com.sparkjava', name: 'spark-core', version: '2.9.2'
 }
 
-task runClusterNode(type: JavaExec) {
-    classpath sourceSets.main.runtimeClasspath
-    main = "exchange.core2.cluster.ExchangeCoreCluster"
-    args = ["$nodeId", "$nNodes"]
-}
+//task runClusterNode(type: JavaExec) {
+//    classpath sourceSets.main.runtimeClasspath
+//    main = "exchange.core2.cluster.ExchangeCoreCluster"
+//    args = ["$nodeId", "$nNodes"]
+//}

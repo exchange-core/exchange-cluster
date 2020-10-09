@@ -1,5 +1,7 @@
 package exchange.core2.cluster.client;
 
+import exchange.core2.cluster.conf.ClusterConfiguration;
+import exchange.core2.cluster.utils.NetworkUtils;
 import exchange.core2.core.common.OrderAction;
 import exchange.core2.core.common.OrderType;
 import exchange.core2.core.common.cmd.OrderCommandType;
@@ -19,10 +21,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.IntStream;
-
-import static exchange.core2.cluster.utils.NetworkUtils.ingressEndpoints;
-import static java.util.stream.Collectors.toList;
 
 public class ExchangeCoreClusterClient implements EgressListener {
 
@@ -32,14 +30,12 @@ public class ExchangeCoreClusterClient implements EgressListener {
     private final Logger log = LoggerFactory.getLogger(ExchangeCoreClusterClient.class);
     private final Map<Long, DirectBuffer> responsesMap = new HashMap<>();
 
-    public ExchangeCoreClusterClient(
-            String aeronDirName,
-            String ingressHost,
-            String egressHost,
-            int egressPort,
-            boolean deleteOnStart
-    ) {
-        MediaDriver clientMediaDriver = MediaDriver.launchEmbedded(
+    public ExchangeCoreClusterClient(final String aeronDirName,
+           final ClusterConfiguration clusterConfiguration,
+           final String egressChannelEndpoint,
+           final boolean deleteOnStart) {
+
+        final MediaDriver clientMediaDriver = MediaDriver.launchEmbedded(
                 new MediaDriver.Context()
                         .threadingMode(ThreadingMode.SHARED)
                         .dirDeleteOnStart(deleteOnStart)
@@ -47,13 +43,12 @@ public class ExchangeCoreClusterClient implements EgressListener {
                         .aeronDirectoryName(aeronDirName)
         );
 
-        String egressChannelEndpoint = egressHost + ":" + egressPort;
         this.clusterContext =  new AeronCluster.Context()
                 .egressListener(this)
                 .egressChannel("aeron:udp?endpoint=" + egressChannelEndpoint)
                 .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
                 .ingressChannel("aeron:udp")
-                .ingressEndpoints(ingressEndpoints(IntStream.range(0, 3).mapToObj(i -> ingressHost).collect(toList())));
+                .ingressEndpoints(NetworkUtils.ingressEndpoints(clusterConfiguration));
     }
 
     public void connectToCluster() {

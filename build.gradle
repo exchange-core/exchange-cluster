@@ -11,14 +11,36 @@ repositories {
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
-    implementation group: 'io.aeron', name: 'aeron-all', version: '1.28.2'
-    implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.30'
-    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
-    compile group: 'exchange.core2', name: 'exchange-core', version: '0.5.3'
+    compile group: 'io.aeron', name: 'aeron-all', version: '1.28.2'
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.30'
+    compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
+    compile('exchange.core2:exchange-core:0.5.3') {
+        exclude group: 'org.agrona'
+    }
     compile group: 'org.projectlombok', name: 'lombok', version: '1.18.12'
     compile group: 'com.google.guava', name: 'guava', version: '29.0-jre'
     compile group: 'com.sparkjava', name: 'spark-core', version: '2.9.2'
+    compile 'info.picocli:picocli:4.5.1'
+
+    annotationProcessor 'info.picocli:picocli-codegen:4.5.1'
 }
+
+compileJava {
+    options.compilerArgs += ["-Aproject=${project.group}/${project.name}"]
+}
+
+jar {
+    manifest {
+        attributes "Main-Class": "exchange.core2.cluster.ExchangeCoreCluster"
+    }
+
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+}
+
 
 //task runClusterNode(type: JavaExec) {
 //    classpath sourceSets.main.runtimeClasspath

@@ -1,21 +1,56 @@
 package exchange.core2.cluster;
 
 import exchange.core2.cluster.conf.ClusterConfiguration;
-import exchange.core2.cluster.conf.ClusterLocalConfiguration;
+import exchange.core2.cluster.conf.ClusterConfigurationsFactory;
+import exchange.core2.cluster.example.SampleExchangeCoreClusterClient;
 import org.agrona.concurrent.ShutdownSignalBarrier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import picocli.CommandLine;
 
-public class ExchangeCoreCluster {
 
-    public static void main(String[] args) {
-        final int nodeId = Integer.parseInt(args[0]);
-        final int nNodes = Integer.parseInt(args[1]);
+@CommandLine.Command(name = "run", description = "Run cluster node")
+public class ExchangeCoreCluster implements Runnable {
 
-        final ClusterConfiguration clusterConfiguration = new ClusterLocalConfiguration(nNodes);
+    private static final Logger log = LoggerFactory.getLogger(SampleExchangeCoreClusterClient.class);
+
+    @CommandLine.Option(names = {"-m", "--mode"}, required = true)
+    private ConfigurationType configurationType;
+
+    @CommandLine.Option(names = {"-t", "--total-nodes"}, defaultValue = "3")
+    private int totalNodes;
+
+    @CommandLine.Option(names = {"-n", "--node"}, required = true)
+    private int nodeId;
+
+    @CommandLine.Option(names = {"-p", "--properties"})
+    private String propertiesFilename;
+
+    @Override
+    public void run() {
+
+        log.info("Initializing cluster configuration...");
+        final ClusterConfiguration clusterConfiguration = ClusterConfigurationsFactory.createClusterConfiguration(
+                configurationType,
+                totalNodes,
+                propertiesFilename);
+
+        log.info("Created {}", clusterConfiguration);
 
         final ShutdownSignalBarrier barrier = new ShutdownSignalBarrier();
         final ExchangeCoreClusterNode clusterNode = new ExchangeCoreClusterNode(barrier, clusterConfiguration);
 
-        clusterNode.start(nodeId, nNodes, true);
+        clusterNode.start(nodeId, true);
+
         barrier.await();
+    }
+
+    public static void main(String[] args) {
+        new CommandLine(new ExchangeCoreCluster()).execute(args);
+    }
+
+    public enum ConfigurationType {
+        LOCAL,
+        MULTISERVER
     }
 }

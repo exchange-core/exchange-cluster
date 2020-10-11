@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 
 public class ExchangeCoreClusteredService implements ClusteredService {
@@ -127,5 +128,17 @@ public class ExchangeCoreClusteredService implements ClusteredService {
     @Override
     public void onTerminate(Cluster cluster) {
         log.info("In onTerminate: {}", cluster);
+    }
+
+    public void onNewLeadershipTermEvent(
+            long leadershipTermId,
+            long logPosition,
+            long timestamp,
+            long termBaseLogPosition,
+            int leaderMemberId,
+            int logSessionId,
+            TimeUnit timeUnit,
+            int appVersion) {
+        log.info("onNewLeadershipTermEvent: leadershipTermId={} logPosition={} leaderMemberId={}", leadershipTermId, logPosition, leaderMemberId);
     }
 }

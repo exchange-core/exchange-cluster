@@ -53,7 +53,7 @@ public class ExchangeCoreClusterNode {
                 .build();
     }
 
-    public void start(final int nodeId, final int nNodes, final boolean deleteOnStart) {
+    public void start(final int nodeId, final boolean deleteOnStart) {
         final String aeronDir = new File(System.getProperty("user.dir"), "aeron-cluster-node-" + nodeId)
                 .getAbsolutePath();
 

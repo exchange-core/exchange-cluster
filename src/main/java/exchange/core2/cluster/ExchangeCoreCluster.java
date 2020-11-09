@@ -2,7 +2,7 @@ package exchange.core2.cluster;
 
 import exchange.core2.cluster.conf.ClusterConfiguration;
 import exchange.core2.cluster.conf.ClusterConfigurationsFactory;
-import exchange.core2.cluster.example.SampleExchangeCoreClusterClient;
+import exchange.core2.cluster.example.RestApiClusterClient;
 import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,7 +12,7 @@ import picocli.CommandLine;
 @CommandLine.Command(name = "run", description = "Run cluster node")
 public class ExchangeCoreCluster implements Runnable {
 
-    private static final Logger log = LoggerFactory.getLogger(SampleExchangeCoreClusterClient.class);
+    private static final Logger log = LoggerFactory.getLogger(RestApiClusterClient.class);
 
     @CommandLine.Option(names = {"-m", "--mode"}, required = true)
     private ConfigurationType configurationType;

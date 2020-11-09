@@ -1,13 +1,7 @@
 package exchange.core2.cluster;
 
-import exchange.core2.cluster.handlers.ExchangeRequestDecoders;
-import exchange.core2.cluster.handlers.ExchangeResponseEncoders;
-import exchange.core2.core.ExchangeApi;
-import exchange.core2.core.ExchangeCore;
-import exchange.core2.core.common.api.ApiCommand;
-import exchange.core2.core.common.cmd.OrderCommand;
-import exchange.core2.core.common.cmd.OrderCommandType;
-import exchange.core2.core.common.config.ExchangeConfiguration;
+import exchange.core2.cluster.handlers.MatchingEngine;
+import exchange.core2.cluster.utils.BufferWriter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.cluster.codecs.CloseReason;
@@ -15,16 +9,11 @@ import io.aeron.cluster.service.ClientSession;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusteredService;
 import io.aeron.logbuffer.Header;
-import org.agrona.BitUtil;
-import org.agrona.DirectBuffer;
-import org.agrona.ExpandableDirectByteBuffer;
-import org.agrona.MutableDirectBuffer;
+import org.agrona.*;
 import org.agrona.concurrent.IdleStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 
@@ -33,18 +22,16 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
     private final MutableDirectBuffer egressMessageBuffer = new ExpandableDirectByteBuffer(512);
     private IdleStrategy idleStrategy;
-    private final ExchangeCore exchangeCore = ExchangeCore.builder()
-            .exchangeConfiguration(ExchangeConfiguration.defaultBuilder().build())
-            .resultsConsumer((cmd, l) -> log.info("{}", cmd))
-            .build();
 
-    private final ExchangeApi exchangeApi = exchangeCore.getApi();
+    // clientMessageId is always written first, therefore set initial offset at SIZE_OF_LONG
+    private final BufferWriter bufferWriter = new BufferWriter(egressMessageBuffer, BitUtil.SIZE_OF_LONG);
+
+    private final MatchingEngine matchingEngine = new MatchingEngine(bufferWriter);
 
     @Override
     public void onStart(Cluster cluster, Image snapshotImage) {
         log.info("Cluster service started");
         this.idleStrategy = cluster.idleStrategy();
-        exchangeCore.startup();
     }
 
     @Override
@@ -59,55 +46,40 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
     @Override
     public void onSessionMessage(
-            ClientSession session,
-            long timestamp,
-            DirectBuffer buffer,
-            int offset,
-            int length,
-            Header header
-    ) {
-        log.info("Session message: {}", buffer);
+            final ClientSession session,
+            final long timestamp,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header) {
+
+        log.info("Session message length={} offset={} \n{}",
+                length, offset,
+                PrintBufferUtil.prettyHexDump(buffer, offset, length));
+
 
         int currentOffset = offset;
-        long clientMessageId = buffer.getLong(currentOffset);
+        final long clientMessageId = buffer.getLong(currentOffset);
         currentOffset += BitUtil.SIZE_OF_LONG;
 
-        OrderCommandType orderCommandType = OrderCommandType.fromCode(buffer.getByte(currentOffset));
-        currentOffset += BitUtil.SIZE_OF_BYTE;
+        log.debug("clientMessageId={}", clientMessageId);
 
-        ApiCommand exchangeRequest = ExchangeRequestDecoders.decode(orderCommandType, buffer, currentOffset);
-
-        if (exchangeRequest == null) {
-            log.info("Translator for OrderCommandType {} has not been implemented yet. Skipping.", orderCommandType);
-            return;
-        }
+        matchingEngine.onMessage(buffer, currentOffset, length);
 
         if (session != null) {
             // |---long clientMessageId---|---byte responseType---|---int commandResult---|
             // |---(optional) byte[] responseBody---|
-            CompletableFuture<OrderCommand> responseFuture = exchangeApi.submitCommandAsyncFullResponse(exchangeRequest);
-            OrderCommand exchangeResponse;
 
-            int currentEgressBufferOffset = 0;
-            egressMessageBuffer.putLong(currentEgressBufferOffset, clientMessageId);
-            currentEgressBufferOffset += BitUtil.SIZE_OF_LONG;
+            egressMessageBuffer.putLong(0, clientMessageId);
 
-            egressMessageBuffer.putByte(currentEgressBufferOffset, orderCommandType.getCode());
-            currentEgressBufferOffset += BitUtil.SIZE_OF_BYTE;
-
-            try {
-                exchangeResponse = responseFuture.get();
-            } catch (InterruptedException | ExecutionException e) {
-                log.error("Exception while completing response future occurred. Returning", e);
-                return;
-            }
-
-            ExchangeResponseEncoders.encode(exchangeResponse, egressMessageBuffer, currentEgressBufferOffset);
+            final int writerPosition = bufferWriter.getWriterPosition();
             log.info("Responding with {}", egressMessageBuffer);
-            while (session.offer(egressMessageBuffer, 0, 512) < 0) {
+            while (session.offer(egressMessageBuffer, 0, writerPosition) < 0) {
                 idleStrategy.idle();
             }
         }
+
+        bufferWriter.reset();
     }
 
     @Override

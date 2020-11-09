@@ -1,6 +1,7 @@
 package exchange.core2.cluster.example;
 
 import exchange.core2.cluster.ExchangeCoreCluster;
+import exchange.core2.cluster.client.ExchangeCoreClusterClient;
 import exchange.core2.cluster.conf.ClusterConfiguration;
 import exchange.core2.cluster.conf.ClusterConfigurationsFactory;
 import org.slf4j.Logger;
@@ -26,6 +27,9 @@ public class ClientRunner implements Runnable {
     @CommandLine.Option(names = {"-p", "--properties"})
     private String propertiesFilename;
 
+    @CommandLine.Option(names = {"-s", "--service-mode"}, required = true)
+    private ServiceMode serviceMode;
+
     @Override
     public void run() {
 
@@ -42,16 +46,33 @@ public class ClientRunner implements Runnable {
 
         log.info("clientEndpoint={}", clientEndpoint);
 
-        final SampleExchangeCoreClusterClient clusterClient = new SampleExchangeCoreClusterClient(
-                aeronDirName, clusterConfiguration,
-                clientEndpoint);
+        final ExchangeCoreClusterClient clusterClient = new ExchangeCoreClusterClient(
+                aeronDirName,
+                clusterConfiguration,
+                clientEndpoint,
+                true);
 
-        clusterClient.connectToCluster();
-        clusterClient.registerRoutes();
+        switch (serviceMode) {
+            case REST_API:
+                final RestApiClusterClient restApi = new RestApiClusterClient(clusterClient);
+                restApi.registerRoutes();
+                break;
+
+            case TESTING:
+                final StressTestClusterClient tester = new StressTestClusterClient(clusterClient);
+                tester.performTest();
+                break;
+        }
+
+
     }
 
     public static void main(String[] args) {
         new CommandLine(new ClientRunner()).execute(args);
     }
 
+    public enum ServiceMode {
+        REST_API,
+        TESTING
+    }
 }

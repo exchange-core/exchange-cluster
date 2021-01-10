@@ -1,6 +1,7 @@
 package exchange.core2.cluster.utils;
 
-import exchange.core2.orderbook.L2MarketData;
+import exchange.core2.orderbook.util.BufferReader;
+import exchange.core2.orderbook.util.BufferWriter;
 import org.agrona.BitUtil;
 import org.agrona.MutableDirectBuffer;
 import org.eclipse.collections.api.map.primitive.MutableIntLongMap;
@@ -18,50 +19,6 @@ import static java.lang.System.arraycopy;
 import static java.util.Arrays.copyOfRange;
 
 public class SerializationUtils {
-
-    public static L2MarketData parseL2MarketData(MutableDirectBuffer buffer, int offset) {
-        int currentOffset = offset;
-
-        int askLength = buffer.getInt(currentOffset);
-        currentOffset += BitUtil.SIZE_OF_INT;
-        byte[] askPricesBytes = new byte[askLength];
-        buffer.getBytes(currentOffset, askPricesBytes);
-        long[] askPrices = bytesToLongs(askPricesBytes);
-        currentOffset += askLength;
-
-        byte[] askVolumesBytes = new byte[askLength];
-        buffer.getBytes(currentOffset, askVolumesBytes);
-        long[] askVolumes = bytesToLongs(askVolumesBytes);
-        currentOffset += askLength;
-
-        int askOrdersLength = buffer.getInt(currentOffset);
-        currentOffset += BitUtil.SIZE_OF_INT;
-        byte[] askOrdersBytes = new byte[askOrdersLength];
-        buffer.getBytes(currentOffset, askOrdersBytes);
-        long[] askOrders = bytesToLongs(askOrdersBytes);
-        currentOffset += askOrdersLength;
-
-
-        int bidLength = buffer.getInt(currentOffset);
-        currentOffset += BitUtil.SIZE_OF_INT;
-        byte[] bidPricesBytes = new byte[bidLength];
-        buffer.getBytes(currentOffset, bidPricesBytes);
-        long[] bidPrices = bytesToLongs(bidPricesBytes);
-        currentOffset += bidLength;
-
-        byte[] bidVolumesBytes = new byte[bidLength];
-        buffer.getBytes(currentOffset, bidVolumesBytes);
-        long[] bidVolumes = bytesToLongs(bidVolumesBytes);
-        currentOffset += bidLength;
-
-        int bidOrdersLength = buffer.getInt(currentOffset);
-        currentOffset += BitUtil.SIZE_OF_INT;
-        byte[] bidOrdersBytes = new byte[bidOrdersLength];
-        buffer.getBytes(currentOffset, bidOrdersBytes);
-        long[] bidOrders = bytesToLongs(bidOrdersBytes);
-
-        return new L2MarketData(askPrices, askVolumes, askOrders, bidPrices, bidVolumes, bidOrders);
-    }
 
     static byte[] longsToBytes(long[] longs) {
         byte[] bytes = new byte[longs.length * 8];
@@ -90,11 +47,11 @@ public class SerializationUtils {
 
     public static void marshallIntLongHashMap(final MutableIntLongMap hashMap, final BufferWriter bytes) {
 
-        bytes.writeInt(hashMap.size());
+        bytes.appendInt(hashMap.size());
 
         hashMap.forEachKeyValue((k, v) -> {
-            bytes.writeInt(k);
-            bytes.writeLong(v);
+            bytes.appendInt(k);
+            bytes.appendLong(v);
         });
     }
 
@@ -116,20 +73,20 @@ public class SerializationUtils {
 
     public static <T extends BufferWritable> void marshallLongHashMap(final LongObjectHashMap<T> hashMap, final BufferWriter bytes) {
 
-        bytes.writeInt(hashMap.size());
+        bytes.appendInt(hashMap.size());
 
         hashMap.forEachKeyValue((k, v) -> {
-            bytes.writeLong(k);
+            bytes.appendLong(k);
             v.writeToBuffer(bytes);
         });
     }
 
     public static <T> void marshallLongHashMap(final LongObjectHashMap<T> hashMap, final BiConsumer<T, BufferWriter> valuesMarshaller, final BufferWriter bytes) {
 
-        bytes.writeInt(hashMap.size());
+        bytes.appendInt(hashMap.size());
 
         hashMap.forEachKeyValue((k, v) -> {
-            bytes.writeLong(k);
+            bytes.appendLong(k);
             valuesMarshaller.accept(v, bytes);
         });
     }
@@ -147,17 +104,17 @@ public class SerializationUtils {
     // ---- IntObjectHashMap
 
     public static <T extends BufferWritable> void marshallIntHashMap(final IntObjectHashMap<T> hashMap, final BufferWriter bytes) {
-        bytes.writeInt(hashMap.size());
+        bytes.appendInt(hashMap.size());
         hashMap.forEachKeyValue((k, v) -> {
-            bytes.writeInt(k);
+            bytes.appendInt(k);
             v.writeToBuffer(bytes);
         });
     }
 
     public static <T> void marshallIntHashMap(final IntObjectHashMap<T> hashMap, final BufferWriter bytes, final Consumer<T> elementMarshaller) {
-        bytes.writeInt(hashMap.size());
+        bytes.appendInt(hashMap.size());
         hashMap.forEachKeyValue((k, v) -> {
-            bytes.writeInt(k);
+            bytes.appendInt(k);
             elementMarshaller.accept(v);
         });
     }

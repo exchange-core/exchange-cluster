@@ -1,7 +1,7 @@
 package exchange.core2.cluster.model.binary;
 
-import exchange.core2.cluster.utils.BufferReader;
-import exchange.core2.cluster.utils.BufferWriter;
+import exchange.core2.orderbook.util.BufferReader;
+import exchange.core2.orderbook.util.BufferWriter;
 
 public final class BatchAddSymbolsResult implements BinaryDataResult {
 
@@ -23,9 +23,15 @@ public final class BatchAddSymbolsResult implements BinaryDataResult {
 
     @Override
     public void writeToBuffer(BufferWriter buffer) {
-        buffer.writeInt(resultCode);
+        buffer.appendInt(resultCode);
     }
 
+    @Override
+    public String toString() {
+        return "BatchAddSymbolsResult{" +
+                "resultCode=" + resultCode +
+                '}';
+    }
 
     public enum AddSymbolResultCodes {
         SYMBOL_ALREADY_EXISTS(1);

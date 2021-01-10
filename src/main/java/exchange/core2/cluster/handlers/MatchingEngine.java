@@ -3,13 +3,11 @@ package exchange.core2.cluster.handlers;
 import exchange.core2.cluster.model.CoreSymbolSpecification;
 import exchange.core2.cluster.model.ExchangeCommandCode;
 import exchange.core2.cluster.model.binary.*;
-import exchange.core2.cluster.utils.BufferReader;
-import exchange.core2.cluster.utils.BufferWriter;
-import exchange.core2.orderbook.IOrder;
 import exchange.core2.orderbook.IOrderBook;
-import exchange.core2.orderbook.L2MarketData;
-import exchange.core2.orderbook.OrderAction;
+import exchange.core2.orderbook.VoidOrderBookImpl;
 import exchange.core2.orderbook.naive.OrderBookNaiveImpl;
+import exchange.core2.orderbook.util.BufferReader;
+import exchange.core2.orderbook.util.BufferWriter;
 import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.PrintBufferUtil;
@@ -17,27 +15,30 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 public final class MatchingEngine {
 
     private final static Logger log = LoggerFactory.getLogger(MatchingEngine.class);
-    private final static EmptyOrderBook EMPTY_ORDER_BOOK = new EmptyOrderBook();
 
     private final Map<Integer, IOrderBook<CoreSymbolSpecification>> orderBooks;
     private final BufferWriter bufferWriter;
+    private final IOrderBook<CoreSymbolSpecification> emptyOrderBook;
 
     public MatchingEngine(final BufferWriter bufferWriter) {
         this.orderBooks = new HashMap<>();
         this.bufferWriter = bufferWriter;
+        this.emptyOrderBook = new VoidOrderBookImpl<>(bufferWriter);
     }
 
     public void onMessage(final DirectBuffer buffer,
                           int offset,
                           int length) {
 
+        // read timestamp
+        final long timestamp = buffer.getLong(offset);
+        offset += BitUtil.SIZE_OF_LONG;
+        length -= BitUtil.SIZE_OF_LONG;
 
         // always read command
         final byte cmdCode = buffer.getByte(offset);
@@ -46,25 +47,28 @@ public final class MatchingEngine {
 
         // for some commands resolve symbolId to corresponding order book
         final IOrderBook<CoreSymbolSpecification> orderBook;
-        if (ExchangeCommandCode.isOrderBookRelated(cmdCode)) {
+        final boolean orderBookRelated = ExchangeCommandCode.isOrderBookRelated(cmdCode);
+        if (orderBookRelated) {
             final int symbolId = buffer.getInt(offset);
+            log.debug("isOrderBookRelated symbolId={}", symbolId);
             offset += BitUtil.SIZE_OF_INT;
             length -= BitUtil.SIZE_OF_INT;
-            orderBook = orderBooks.get(symbolId);
+            orderBook = orderBooks.getOrDefault(symbolId, emptyOrderBook);
+
         } else {
-            orderBook = EMPTY_ORDER_BOOK;
+            orderBook = emptyOrderBook;
         }
 
         final ExchangeCommandCode cmd = ExchangeCommandCode.fromCode(cmdCode);
 
-        log.debug("Command {} orderBook={} offset={}", cmd, orderBook, offset);
+        log.debug("Command {} orderBook={} offset={} timestamp={} ", cmd, orderBook, offset, timestamp);
 
         log.info("Data \n{}", PrintBufferUtil.prettyHexDump(buffer, offset, length));
 
 
         switch (cmd) {
             case PLACE_ORDER:
-                orderBook.newOrder(buffer, offset);
+                orderBook.newOrder(buffer, offset, timestamp);
                 break;
 
             case CANCEL_ORDER:
@@ -88,7 +92,7 @@ public final class MatchingEngine {
                 break;
 
             case BINARY_DATA_COMMAND:
-                onBinaryCommand(buffer, offset, length);
+                onBinaryCommand(buffer, cmdCode, offset, length);
                 break;
 
             // TODO add more
@@ -102,7 +106,7 @@ public final class MatchingEngine {
     private boolean addOrderBook(final CoreSymbolSpecification symbolSpecification) {
 
         final IOrderBook<CoreSymbolSpecification> orderBook = new OrderBookNaiveImpl<>(
-                symbolSpecification, true, bufferWriter.getBuffer());
+                symbolSpecification, true, bufferWriter);
 
         log.debug("Created orderbook: {}", symbolSpecification.getSymbolId());
 
@@ -112,19 +116,31 @@ public final class MatchingEngine {
     }
 
     private void onBinaryCommand(final DirectBuffer buffer,
+                                 final byte cmdCode,
                                  final int offset,
                                  int length) {
 
+        bufferWriter.appendByte(cmdCode);
+
+//        log.info(">> BINARY COMMAND length={} offset={} \n{}",
+//                length, offset,
+//                PrintBufferUtil.prettyHexDump(buffer, offset, length));
+
         // TODO use length
-        final BufferReader bufferReader = new BufferReader(buffer, offset);
-        final int binaryCommandCode = bufferReader.readInt();
+        final BufferReader bufferReader = new BufferReader(buffer, length, offset);
+        final short binaryCommandCode = bufferReader.readShort();
+
+
+
+        log.info("offset={} len={} binaryCommandCode={}", offset, length, binaryCommandCode);
         final BinaryCommandType binCmd = BinaryCommandType.of(binaryCommandCode);
 
         final BinaryDataResult result;
         switch (binCmd) {
             case ADD_SYMBOLS:
-                final BatchAddSymbolsCommand batchAddSymbolsCommand = new BatchAddSymbolsCommand(bufferReader);
-                batchAddSymbolsCommand.getSymbols().forEach(this::addOrderBook);
+                final BatchAddSymbolsCommand cmd = new BatchAddSymbolsCommand(bufferReader);
+                bufferWriter.appendShort(cmd.getBinaryCommandTypeCode());
+                cmd.getSymbols().forEach(this::addOrderBook);
                 result = new BatchAddSymbolsResult(0);
 
                 break;
@@ -132,6 +148,8 @@ public final class MatchingEngine {
             default:
                 result = new RuntimeErrorBinaryResult();
         }
+
+        // TODO try/catch exception, pack stacktrace into response, but avoid throwing exceptinons for regular errors
 
         result.writeToBuffer(bufferWriter);
 
@@ -143,95 +161,4 @@ public final class MatchingEngine {
 
     }
 
-    private static class EmptyOrderBook implements IOrderBook<CoreSymbolSpecification> {
-
-        @Override
-        public void newOrder(DirectBuffer buffer, int offset) {
-            throw new IllegalStateException();
-
-        }
-
-        @Override
-        public void cancelOrder(DirectBuffer buffer, int offset) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public void reduceOrder(DirectBuffer buffer, int offset) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public void moveOrder(DirectBuffer buffer, int offset) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public void sendL2Snapshot(DirectBuffer buffer, int offset) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public int getOrdersNum(OrderAction action) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public long getTotalOrdersVolume(OrderAction action) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public IOrder getOrderById(long orderId) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public void verifyInternalState() {
-            throw new IllegalStateException();
-
-        }
-
-        @Override
-        public List<IOrder> findUserOrders(long uid) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public CoreSymbolSpecification getSymbolSpec() {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public Stream<? extends IOrder> askOrdersStream(boolean sorted) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public Stream<? extends IOrder> bidOrdersStream(boolean sorted) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public void fillAsks(int size, L2MarketData data) {
-
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public void fillBids(int size, L2MarketData data) {
-            throw new IllegalStateException();
-
-        }
-
-        @Override
-        public int getTotalAskBuckets(int limit) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public int getTotalBidBuckets(int limit) {
-            throw new IllegalStateException();
-        }
-    }
 }

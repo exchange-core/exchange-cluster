@@ -16,9 +16,9 @@
 package exchange.core2.cluster.model.binary;
 
 import exchange.core2.cluster.model.CoreSymbolSpecification;
-import exchange.core2.cluster.utils.BufferReader;
-import exchange.core2.cluster.utils.BufferWriter;
 import exchange.core2.cluster.utils.SerializationUtils;
+import exchange.core2.orderbook.util.BufferReader;
+import exchange.core2.orderbook.util.BufferWriter;
 import org.eclipse.collections.impl.map.mutable.primitive.IntObjectHashMap;
 
 import java.util.Collection;
@@ -50,7 +50,7 @@ public final class BatchAddSymbolsCommand implements BinaryDataCommand {
     }
 
     @Override
-    public int getBinaryCommandTypeCode() {
+    public short getBinaryCommandTypeCode() {
         return BinaryCommandType.ADD_SYMBOLS.getCode();
     }
 

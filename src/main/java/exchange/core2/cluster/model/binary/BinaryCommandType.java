@@ -20,17 +20,17 @@ public enum BinaryCommandType {
     ADD_ACCOUNTS(1002),
     ADD_SYMBOLS(1003);
 
-    private final int code;
+    private final short code;
 
-    public int getCode() {
+    public short getCode() {
         return code;
     }
 
     BinaryCommandType(int code) {
-        this.code = code;
+        this.code = (short) code;
     }
 
-    public static BinaryCommandType of(int code) {
+    public static BinaryCommandType of(short code) {
 
         switch (code) {
             case 1002:

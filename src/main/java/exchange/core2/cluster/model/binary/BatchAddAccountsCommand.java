@@ -15,9 +15,9 @@
  */
 package exchange.core2.cluster.model.binary;
 
-import exchange.core2.cluster.utils.BufferReader;
-import exchange.core2.cluster.utils.BufferWriter;
 import exchange.core2.cluster.utils.SerializationUtils;
+import exchange.core2.orderbook.util.BufferReader;
+import exchange.core2.orderbook.util.BufferWriter;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -41,7 +41,7 @@ public final class BatchAddAccountsCommand implements BinaryDataCommand {
     }
 
     @Override
-    public int getBinaryCommandTypeCode() {
+    public short getBinaryCommandTypeCode() {
         return BinaryCommandType.ADD_ACCOUNTS.getCode();
     }
 }

@@ -26,11 +26,14 @@ public class StressTestClusterClient {
     public void performTest() {
         final CoreSymbolSpecification spec = new CoreSymbolSpecification(38001);
         BatchAddSymbolsCommand binaryDataCommand = new BatchAddSymbolsCommand(Collections.singletonList(spec));
-        clusterClient.sendBinaryDataCommand(0x2233445566778899L, binaryDataCommand);
-
+        clusterClient.sendBinaryDataCommand(
+                0x2233445566778899L,
+                System.nanoTime(),
+                binaryDataCommand);
 
         clusterClient.placeOrder(
-                123456700000001L,
+                0x55FF55FF55FF55FFL,
+                System.nanoTime(),
                 38001,
                 IOrderBook.ORDER_TYPE_GTC,
                 1001L,
@@ -38,10 +41,12 @@ public class StressTestClusterClient {
                 50_000L,
                 50_000L,
                 800_000L,
-                OrderAction.BID);
+                OrderAction.BID,
+                981438274);
 
         clusterClient.placeOrder(
                 123456700000002L,
+                System.nanoTime(),
                 38001,
                 IOrderBook.ORDER_TYPE_IOC,
                 1002L,
@@ -49,7 +54,8 @@ public class StressTestClusterClient {
                 49_999L,
                 49_999L,
                 100_000L,
-                OrderAction.ASK);
+                OrderAction.ASK,
+                -1982378279);
 
     }
 

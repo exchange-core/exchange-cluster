@@ -2,12 +2,16 @@ package exchange.core2.cluster.client;
 
 import exchange.core2.cluster.conf.ClusterConfiguration;
 import exchange.core2.cluster.model.ExchangeCommandCode;
+import exchange.core2.cluster.model.binary.BatchAddSymbolsResult;
+import exchange.core2.cluster.model.binary.BinaryCommandType;
 import exchange.core2.cluster.model.binary.BinaryDataCommand;
-import exchange.core2.cluster.utils.BufferWriter;
 import exchange.core2.cluster.utils.NetworkUtils;
-import exchange.core2.orderbook.CommandsEncoder;
-import exchange.core2.orderbook.IOrderBook;
 import exchange.core2.orderbook.OrderAction;
+import exchange.core2.orderbook.api.OrderBookResponse;
+import exchange.core2.orderbook.util.BufferReader;
+import exchange.core2.orderbook.util.BufferWriter;
+import exchange.core2.orderbook.util.CommandsEncoder;
+import exchange.core2.orderbook.util.ResponseDecoder;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.client.EgressListener;
 import io.aeron.driver.MediaDriver;
@@ -33,6 +37,9 @@ public class ExchangeCoreClusterClient implements EgressListener {
 
     private final MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
     private final BufferWriter bufferWriter = new BufferWriter(requestBuffer, 0);
+
+    private static final int ORDER_BOOK_RESPONSE_SHIFT = BitUtil.SIZE_OF_LONG; // clientMsgId only TODO +timestamp
+
 
     public ExchangeCoreClusterClient(final String aeronDirName,
                                      final ClusterConfiguration clusterConfiguration,
@@ -79,10 +86,65 @@ public class ExchangeCoreClusterClient implements EgressListener {
             int length,
             Header header) {
 
-        log.info("Received from cluster: \n{}", PrintBufferUtil.prettyHexDump(buffer, 0, length));
+        log.info("FROM CLUSTER <<< (t={} len={}): \n{}", timestamp, length, PrintBufferUtil.prettyHexDump(buffer, offset, length));
 
-        long clientMessageId = buffer.getLong(offset);
-        //responsesMap.put(clientMessageId, buffer);
+        final BufferReader bufferReader = new BufferReader(buffer, length, offset);
+
+        final long clientMessageId = bufferReader.readLong();
+        log.debug("clientMessageId={}", clientMessageId);
+
+        if (ExchangeCommandCode.isOrderBookRelated(bufferReader.getByte(BitUtil.SIZE_OF_LONG))) {
+
+            // user standard OrderBook responses decoder
+            // TODO reuse buffer
+            final BufferReader cmdReader = new BufferReader(
+                    buffer,
+                    length - ORDER_BOOK_RESPONSE_SHIFT,
+                    offset + ORDER_BOOK_RESPONSE_SHIFT);
+
+            final OrderBookResponse orderBookResponse = ResponseDecoder.readResult(cmdReader);
+            log.debug("response: {}", orderBookResponse);
+        } else {
+
+            final byte commandCode = bufferReader.readByte();
+            final ExchangeCommandCode exchangeCommandCode = ExchangeCommandCode.fromCode(commandCode);
+
+            log.debug("exchangeCommandCode: {}", exchangeCommandCode);
+
+            switch (exchangeCommandCode) {
+                case BINARY_DATA_COMMAND:
+                    binaryDataCommandResponse(bufferReader);
+                    break;
+
+                case BINARY_DATA_QUERY:
+
+                default:
+                    throw new IllegalStateException("not supported: " + exchangeCommandCode);
+            }
+
+
+        }
+
+
+        // responsesMap.put(clientMessageId, buffer);
+    }
+
+    public void binaryDataCommandResponse(final BufferReader bufferReader) {
+
+        log.info("binaryDataCommandResponse (read at={}):\n{}", bufferReader.getReadPosition(), bufferReader.prettyHexDump());
+
+        short code = bufferReader.readShort();
+        log.info("code={}", code);
+        BinaryCommandType binaryCommandType = BinaryCommandType.of(code);
+        switch (binaryCommandType) {
+            case ADD_SYMBOLS:
+                BatchAddSymbolsResult result = new BatchAddSymbolsResult(bufferReader);
+                log.debug("result {}", result);
+                break;
+            default:
+                throw new IllegalStateException("Unsupported " + binaryCommandType);
+        }
+
     }
 
 
@@ -98,6 +160,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
 //    }
 
     public void placeOrder(final long clientMessageId,
+                           final long timestamp,
                            final int symbolId,
                            final byte type,
                            final long orderId,
@@ -105,19 +168,24 @@ public class ExchangeCoreClusterClient implements EgressListener {
                            final long price,
                            final long reservedBidPrice,
                            final long size,
-                           final OrderAction action) {
+                           final OrderAction action,
+                           final int userCookie) {
+
 
         int offset = 0;
         requestBuffer.putLong(offset, clientMessageId);
         offset += BitUtil.SIZE_OF_LONG;
 
-        requestBuffer.putByte(BitUtil.SIZE_OF_LONG, ExchangeCommandCode.PLACE_ORDER.getCode());
+        requestBuffer.putLong(offset, timestamp);
+        offset += BitUtil.SIZE_OF_LONG;
+
+        requestBuffer.putByte(offset, ExchangeCommandCode.PLACE_ORDER.getCode());
         offset += BitUtil.SIZE_OF_BYTE;
 
-        requestBuffer.putLong(offset, symbolId);
+        requestBuffer.putInt(offset, symbolId);
         offset += BitUtil.SIZE_OF_INT;
 
-        CommandsEncoder.placeOrder(
+        offset += CommandsEncoder.placeOrder(
                 requestBuffer,
                 offset,
                 type,
@@ -126,19 +194,22 @@ public class ExchangeCoreClusterClient implements EgressListener {
                 price,
                 reservedBidPrice,
                 size,
-                action);
-        offset += IOrderBook.PLACE_OFFSET_END;
+                action,
+                userCookie);
 
         sendToCluster(requestBuffer, offset);
     }
 
 
-    public void sendBinaryDataCommand(final long clientMessageId, final BinaryDataCommand binaryDataCommand) {
+    public void sendBinaryDataCommand(final long clientMessageId,
+                                      final long timestamp,
+                                      final BinaryDataCommand binaryDataCommand) {
 
         bufferWriter.reset();
-        bufferWriter.writeLong(clientMessageId);
-        bufferWriter.writeByte(ExchangeCommandCode.BINARY_DATA_COMMAND.getCode());
-        bufferWriter.writeInt(binaryDataCommand.getBinaryCommandTypeCode());
+        bufferWriter.appendLong(clientMessageId);
+        bufferWriter.appendLong(timestamp);
+        bufferWriter.appendByte(ExchangeCommandCode.BINARY_DATA_COMMAND.getCode());
+        bufferWriter.appendShort(binaryDataCommand.getBinaryCommandTypeCode());
         binaryDataCommand.writeToBuffer(bufferWriter);
         sendToCluster(requestBuffer, bufferWriter.getWriterPosition());
     }
@@ -251,6 +322,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
 
+    // TODO fix
     public void sendOrderBookRequest(int symbol, int depth) {
         MutableDirectBuffer requestBuffer = new ExpandableDirectByteBuffer();
         int currentOffset = 0;

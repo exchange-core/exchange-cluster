@@ -1,9 +1,9 @@
 package exchange.core2.cluster.model;
 
-import exchange.core2.cluster.utils.BufferReader;
 import exchange.core2.cluster.utils.BufferWritable;
-import exchange.core2.cluster.utils.BufferWriter;
 import exchange.core2.orderbook.ISymbolSpecification;
+import exchange.core2.orderbook.util.BufferReader;
+import exchange.core2.orderbook.util.BufferWriter;
 
 import java.util.Objects;
 
@@ -37,6 +37,6 @@ public final class CoreSymbolSpecification implements ISymbolSpecification, Buff
 
     @Override
     public void writeToBuffer(BufferWriter buffer) {
-        buffer.writeInt(symbolId);
+        buffer.appendInt(symbolId);
     }
 }

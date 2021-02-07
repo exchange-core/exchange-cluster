@@ -2,8 +2,10 @@ package exchange.core2.cluster.example;
 
 import exchange.core2.cluster.ExchangeCoreCluster;
 import exchange.core2.cluster.client.ExchangeCoreClusterClient;
+import exchange.core2.cluster.client.LoggingResponseHandler;
 import exchange.core2.cluster.conf.ClusterConfiguration;
 import exchange.core2.cluster.conf.ClusterConfigurationsFactory;
+import exchange.core2.orderbook.IResponseHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -46,10 +48,13 @@ public class ClientRunner implements Runnable {
 
         log.info("clientEndpoint={}", clientEndpoint);
 
+        final IResponseHandler responseHandler = new LoggingResponseHandler();
+
         final ExchangeCoreClusterClient clusterClient = new ExchangeCoreClusterClient(
                 aeronDirName,
                 clusterConfiguration,
                 clientEndpoint,
+                responseHandler,
                 true);
 
         switch (serviceMode) {

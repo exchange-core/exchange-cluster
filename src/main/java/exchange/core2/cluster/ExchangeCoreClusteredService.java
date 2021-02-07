@@ -23,7 +23,7 @@ public class ExchangeCoreClusteredService implements ClusteredService {
     private final MutableDirectBuffer egressMessageBuffer = new ExpandableDirectByteBuffer(512);
     private IdleStrategy idleStrategy;
 
-    // clientMessageId is always written first, therefore set initial offset at SIZE_OF_LONG
+    // correlationId is always written first, therefore set initial offset at SIZE_OF_LONG
     private final BufferWriter bufferWriter = new BufferWriter(egressMessageBuffer, BitUtil.SIZE_OF_LONG);
 
     private final MatchingEngine matchingEngine = new MatchingEngine(bufferWriter);
@@ -56,16 +56,16 @@ public class ExchangeCoreClusteredService implements ClusteredService {
         log.info(">>> NEW MESSAGE length={} offset={} CL-timestamp={}\n{}",
                 length, offset, timestamp, PrintBufferUtil.prettyHexDump(buffer, offset, length));
 
-        final long clientMessageId = buffer.getLong(offset);
+        final long correlationId = buffer.getLong(offset);
 
-        log.debug("clientMessageId={}", clientMessageId);
+        log.debug("correlationId={}", correlationId);
 
         // call matching engine
         matchingEngine.onMessage(buffer, offset + BitUtil.SIZE_OF_LONG, length - BitUtil.SIZE_OF_LONG);
 
         if (session != null) {
 
-            egressMessageBuffer.putLong(0, clientMessageId);
+            egressMessageBuffer.putLong(0, correlationId);
 
             final int writerPosition = bufferWriter.getWriterPosition();
 

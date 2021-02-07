@@ -2,6 +2,7 @@ package exchange.core2.cluster;
 
 import exchange.core2.cluster.conf.AeronServiceType;
 import exchange.core2.cluster.conf.ClusterConfiguration;
+import exchange.core2.cluster.utils.NetworkUtils;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
@@ -27,6 +28,10 @@ public class ExchangeCoreClusterNode {
     private final ShutdownSignalBarrier barrier;
     private final ClusterConfiguration clusterConfiguration;
     private final Logger log = LoggerFactory.getLogger(ExchangeCoreClusterNode.class);
+
+    // todo initialize with factory (creator)
+    private ClusteredServiceContainer container;
+    private ClusteredMediaDriver clusteredMediaDriver;
 
     public ExchangeCoreClusterNode(ShutdownSignalBarrier barrier, ClusterConfiguration clusterConfiguration) {
         this.barrier = barrier;
@@ -63,21 +68,21 @@ public class ExchangeCoreClusterNode {
         log.info("Aeron Dir = {}", aeronDir);
         log.info("Cluster Dir = {}", baseDir);
 
-        MediaDriver.Context mediaDriverContext = new MediaDriver.Context();
-        ConsensusModule.Context consensusModuleContext = new ConsensusModule.Context();
-        Archive.Context archiveContext = new Archive.Context();
-        AeronArchive.Context aeronArchiveContext = new AeronArchive.Context();
-        ClusteredServiceContainer.Context serviceContainerContext = new ClusteredServiceContainer.Context();
-
-        ExchangeCoreClusteredService service = new ExchangeCoreClusteredService();
+        final MediaDriver.Context mediaDriverContext = new MediaDriver.Context();
 
         mediaDriverContext
                 .aeronDirectoryName(aeronDir)
                 .threadingMode(ThreadingMode.SHARED)
                 .termBufferSparseFile(true)
                 .multicastFlowControlSupplier(new MinMulticastFlowControlSupplier())
-                .terminationHook(barrier::signal)
+                .terminationHook(() -> {
+                    log.debug("terminationHook - SIGNAL...");
+                    barrier.signal();
+                })
                 .dirDeleteOnStart(deleteOnStart);
+
+
+        final Archive.Context archiveContext = new Archive.Context();
 
         archiveContext
                 .archiveDir(new File(baseDir, "archive"))
@@ -86,6 +91,8 @@ public class ExchangeCoreClusterNode {
                 .recordingEventsEnabled(false)
                 .threadingMode(ArchiveThreadingMode.SHARED);
 
+        final AeronArchive.Context aeronArchiveContext = new AeronArchive.Context();
+
         aeronArchiveContext
                 .lock(NoOpLock.INSTANCE)
                 .controlRequestChannel(archiveContext.controlChannel())
@@ -93,7 +100,9 @@ public class ExchangeCoreClusterNode {
                 .controlResponseChannel(udpChannel(nodeId, AeronServiceType.ARCHIVE_CONTROL_RESPONSE))
                 .aeronDirectoryName(aeronDir);
 
-        final String clusterMembers = clusterMembers(clusterConfiguration);
+        final String clusterMembers = NetworkUtils.clusterMembers(clusterConfiguration);
+
+        final ConsensusModule.Context consensusModuleContext = new ConsensusModule.Context();
 
         consensusModuleContext
                 .sessionTimeoutNs(TimeUnit.SECONDS.toNanos(3600))
@@ -107,6 +116,11 @@ public class ExchangeCoreClusterNode {
                 .archiveContext(aeronArchiveContext.clone())
                 .deleteDirOnStart(deleteOnStart);
 
+        // TODO provide
+        final ExchangeCoreClusteredService service = new ExchangeCoreClusteredService();
+
+        final ClusteredServiceContainer.Context serviceContainerContext = new ClusteredServiceContainer.Context();
+
         serviceContainerContext
                 .aeronDirectoryName(aeronDir)
                 .archiveContext(aeronArchiveContext.clone())
@@ -114,12 +128,26 @@ public class ExchangeCoreClusterNode {
                 .clusteredService(service)
                 .errorHandler(Throwable::printStackTrace);
 
-        ClusteredMediaDriver clusteredMediaDriver = ClusteredMediaDriver.launch(
+
+        clusteredMediaDriver = ClusteredMediaDriver.launch(
                 mediaDriverContext,
                 archiveContext,
-                consensusModuleContext
-        );
+                consensusModuleContext);
 
-        ClusteredServiceContainer container = ClusteredServiceContainer.launch(serviceContainerContext);
+        container = ClusteredServiceContainer.launch(serviceContainerContext);
+
+    }
+
+    public void stop() {
+
+        log.debug("Closing ClusteredServiceContainer....");
+        container.close();
+        //CloseHelper.quietClose(container);
+
+        log.debug("Closing ClusteredMediaDriver....");
+        clusteredMediaDriver.close();
+        //CloseHelper.quietClose(clusteredMediaDriver);
+
+        log.debug("Cluster node closed");
     }
 }

@@ -31,7 +31,7 @@ public class StressTestClusterClient {
                 System.nanoTime(),
                 binaryDataCommand);
 
-        clusterClient.placeOrder(
+        clusterClient.placeOrderAsync(
                 0x55FF55FF55FF55FFL,
                 System.nanoTime(),
                 38001,
@@ -39,12 +39,12 @@ public class StressTestClusterClient {
                 1001L,
                 10L,
                 50_000L,
-                50_000L,
+                51_000L,
                 800_000L,
                 OrderAction.BID,
                 981438274);
 
-        clusterClient.placeOrder(
+        clusterClient.placeOrderAsync(
                 123456700000002L,
                 System.nanoTime(),
                 38001,
@@ -53,9 +53,32 @@ public class StressTestClusterClient {
                 11L,
                 49_999L,
                 49_999L,
-                100_000L,
+                20_000L,
                 OrderAction.ASK,
                 -1982378279);
+
+        clusterClient.moveOrderAsync(
+                0x22DD22DD22DD22DDL,
+                System.nanoTime(),
+                38001,
+                1001L,
+                10L,
+                50_500L);
+
+        clusterClient.reduceOrderAsync(
+                0x22DD22DD22DD22DDL,
+                System.nanoTime(),
+                38001,
+                1001L,
+                10L,
+                600_000L);
+
+        clusterClient.cancelOrderAsync(
+                0x33EE33EE33EE33EEL,
+                System.nanoTime(),
+                38001,
+                1001L,
+                10L);
 
     }
 

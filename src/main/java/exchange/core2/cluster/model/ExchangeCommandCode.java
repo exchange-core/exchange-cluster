@@ -50,7 +50,7 @@ public enum ExchangeCommandCode {
                 return MOVE_ORDER;
             case 4:
                 return REDUCE_ORDER;
-            case 6:
+            case 5:
                 return ORDER_BOOK_REQUEST;
             case 10:
                 return ADD_CLIENT;

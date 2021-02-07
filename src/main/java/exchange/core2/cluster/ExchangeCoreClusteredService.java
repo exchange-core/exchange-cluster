@@ -53,12 +53,11 @@ public class ExchangeCoreClusteredService implements ClusteredService {
             final int length,
             final Header header) {
 
-        log.info(">>> NEW MESSAGE length={} offset={} CL-timestamp={}\n{}",
-                length, offset, timestamp, PrintBufferUtil.prettyHexDump(buffer, offset, length));
+//        log.info(">>> NEW MESSAGE length={} offset={} CL-timestamp={}\n{}", length, offset, timestamp, PrintBufferUtil.prettyHexDump(buffer, offset, length));
 
         final long correlationId = buffer.getLong(offset);
 
-        log.debug("correlationId={}", correlationId);
+//        log.debug("correlationId={}", correlationId);
 
         // call matching engine
         matchingEngine.onMessage(buffer, offset + BitUtil.SIZE_OF_LONG, length - BitUtil.SIZE_OF_LONG);
@@ -69,8 +68,7 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
             final int writerPosition = bufferWriter.getWriterPosition();
 
-            log.info("<<< Responding with (length={}) \n{}",
-                    writerPosition, PrintBufferUtil.prettyHexDump(egressMessageBuffer, 0, writerPosition));
+//            log.info("<<< Responding with (length={}) \n{}", writerPosition, PrintBufferUtil.prettyHexDump(egressMessageBuffer, 0, writerPosition));
 
             // TODO can use tryClaim (without copy semantics)
             while (session.offer(egressMessageBuffer, 0, writerPosition) < 0) {

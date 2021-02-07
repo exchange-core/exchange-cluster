@@ -50,7 +50,7 @@ public final class MatchingEngine {
         final boolean orderBookRelated = ExchangeCommandCode.isOrderBookRelated(cmdCode);
         if (orderBookRelated) {
             final int symbolId = buffer.getInt(offset);
-            log.debug("isOrderBookRelated symbolId={}", symbolId);
+//            log.debug("isOrderBookRelated symbolId={}", symbolId);
             offset += BitUtil.SIZE_OF_INT;
             length -= BitUtil.SIZE_OF_INT;
             orderBook = orderBooks.getOrDefault(symbolId, emptyOrderBook);
@@ -61,9 +61,9 @@ public final class MatchingEngine {
 
         final ExchangeCommandCode cmd = ExchangeCommandCode.fromCode(cmdCode);
 
-        log.debug("Command {} orderBook={} offset={} timestamp={} ", cmd, orderBook, offset, timestamp);
+//        log.debug("Command {} orderBook={} offset={} timestamp={} ", cmd, orderBook, offset, timestamp);
 
-        log.info("Data \n{}", PrintBufferUtil.prettyHexDump(buffer, offset, length));
+//        log.info("Data \n{}", PrintBufferUtil.prettyHexDump(buffer, offset, length));
 
 
         switch (cmd) {
@@ -106,7 +106,7 @@ public final class MatchingEngine {
     private boolean addOrderBook(final CoreSymbolSpecification symbolSpecification) {
 
         final IOrderBook<CoreSymbolSpecification> orderBook = new OrderBookNaiveImpl<>(
-                symbolSpecification, true, bufferWriter);
+                symbolSpecification, false, bufferWriter);
 
         log.debug("Created orderbook: {}", symbolSpecification.getSymbolId());
 

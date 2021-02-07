@@ -6,6 +6,7 @@ import exchange.core2.cluster.model.binary.BatchAddSymbolsResult;
 import exchange.core2.cluster.model.binary.BinaryCommandType;
 import exchange.core2.cluster.model.binary.BinaryDataCommand;
 import exchange.core2.cluster.utils.NetworkUtils;
+import exchange.core2.orderbook.IOrderBook;
 import exchange.core2.orderbook.IResponseHandler;
 import exchange.core2.orderbook.OrderAction;
 import exchange.core2.orderbook.util.BufferReader;
@@ -22,6 +23,8 @@ import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static exchange.core2.orderbook.IOrderBook.fixedCommandSize;
 
 /**
  * Single-threaded writer
@@ -93,12 +96,12 @@ public class ExchangeCoreClusterClient implements EgressListener {
             int length,
             Header header) {
 
-        log.info("FROM CLUSTER <<< (t={} len={}): \n{}", timestamp, length, PrintBufferUtil.prettyHexDump(buffer, offset, length));
+//        log.info("FROM CLUSTER <<< (t={} len={}): \n{}", timestamp, length, PrintBufferUtil.prettyHexDump(buffer, offset, length));
 
         final BufferReader bufferReader = new BufferReader(buffer, length, offset);
 
         final long correlationId = bufferReader.readLong();
-        log.debug("correlationId={}", correlationId);
+//        log.debug("correlationId={}", correlationId);
 
         if (ExchangeCommandCode.isOrderBookRelated(bufferReader.getByte(BitUtil.SIZE_OF_LONG))) {
 
@@ -123,7 +126,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
             final byte commandCode = bufferReader.readByte();
             final ExchangeCommandCode exchangeCommandCode = ExchangeCommandCode.fromCode(commandCode);
 
-            log.debug("exchangeCommandCode: {}", exchangeCommandCode);
+//            log.debug("exchangeCommandCode: {}", exchangeCommandCode);
 
             switch (exchangeCommandCode) {
                 case BINARY_DATA_COMMAND:
@@ -173,6 +176,25 @@ public class ExchangeCoreClusterClient implements EgressListener {
 //        }
 //    }
 
+
+    public void placePreparedCommandAsync(final long correlationId,
+                                          final long timestamp,
+                                          final int symbolId,
+                                          final BufferReader bufferReader) {
+
+        bufferWriter.reset();
+
+        final byte cmd = bufferReader.readByte();
+
+        int offset = writeStandardCommandHeader(correlationId, timestamp, symbolId, cmd);
+        bufferWriter.skipBytes(offset);
+
+        bufferReader.readBytesToWriter(bufferWriter, IOrderBook.fixedCommandSize(cmd));
+
+        sendToCluster(bufferWriter.getBuffer(), bufferWriter.getWriterPosition());
+    }
+
+
     public void placeOrderAsync(final long correlationId,
                                 final long timestamp,
                                 final int symbolId,
@@ -185,7 +207,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
                                 final OrderAction action,
                                 final int userCookie) {
 
-        int offset = writeStandardCommandHeader(correlationId, timestamp, symbolId, ExchangeCommandCode.PLACE_ORDER);
+        int offset = writeStandardCommandHeader(correlationId, timestamp, symbolId, ExchangeCommandCode.PLACE_ORDER.getCode());
 
         offset += CommandsEncoder.placeOrder(
                 requestBuffer,
@@ -209,7 +231,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
                                  final long orderId,
                                  final long uid) {
 
-        int offset = writeStandardCommandHeader(correlationId, timestamp, symbolId, ExchangeCommandCode.CANCEL_ORDER);
+        int offset = writeStandardCommandHeader(correlationId, timestamp, symbolId, ExchangeCommandCode.CANCEL_ORDER.getCode());
 
         offset += CommandsEncoder.cancel(
                 requestBuffer,
@@ -227,7 +249,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
                                final long uid,
                                final long price) {
 
-        int offset = writeStandardCommandHeader(correlationId, timestamp, symbolId, ExchangeCommandCode.MOVE_ORDER);
+        int offset = writeStandardCommandHeader(correlationId, timestamp, symbolId, ExchangeCommandCode.MOVE_ORDER.getCode());
 
         offset += CommandsEncoder.move(
                 requestBuffer,
@@ -246,7 +268,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
                                  final long uid,
                                  final long size) {
 
-        int offset = writeStandardCommandHeader(clientMessageId, timestamp, symbolId, ExchangeCommandCode.REDUCE_ORDER);
+        int offset = writeStandardCommandHeader(clientMessageId, timestamp, symbolId, ExchangeCommandCode.REDUCE_ORDER.getCode());
 
         offset += CommandsEncoder.reduce(
                 requestBuffer,
@@ -259,11 +281,11 @@ public class ExchangeCoreClusterClient implements EgressListener {
     }
 
     public void sendL2DataQueryAsync(final long clientMessageId,
-                                 final long timestamp,
-                                 final int symbolId,
-                                 final int numRecordsLimit) {
+                                     final long timestamp,
+                                     final int symbolId,
+                                     final int numRecordsLimit) {
 
-        int offset = writeStandardCommandHeader(clientMessageId, timestamp, symbolId, ExchangeCommandCode.ORDER_BOOK_REQUEST);
+        int offset = writeStandardCommandHeader(clientMessageId, timestamp, symbolId, ExchangeCommandCode.ORDER_BOOK_REQUEST.getCode());
 
         offset += CommandsEncoder.L2DataQuery(
                 requestBuffer,
@@ -277,7 +299,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     private int writeStandardCommandHeader(long correlationId,
                                            long timestamp,
                                            int symbolId,
-                                           ExchangeCommandCode commandCode) {
+                                           byte cmdCode) {
         int offset = 0;
         requestBuffer.putLong(offset, correlationId);
         offset += BitUtil.SIZE_OF_LONG;
@@ -285,7 +307,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
         requestBuffer.putLong(offset, timestamp);
         offset += BitUtil.SIZE_OF_LONG;
 
-        requestBuffer.putByte(offset, commandCode.getCode());
+        requestBuffer.putByte(offset, cmdCode);
         offset += BitUtil.SIZE_OF_BYTE;
 
         requestBuffer.putInt(offset, symbolId);
@@ -309,14 +331,14 @@ public class ExchangeCoreClusterClient implements EgressListener {
 
     public void sendToCluster(final MutableDirectBuffer buffer, final int length) {
 
-        log.info("Sending to cluster: \n{}", PrintBufferUtil.prettyHexDump(buffer, 0, length));
+//        log.info("Sending to cluster: \n{}", PrintBufferUtil.prettyHexDump(buffer, 0, length));
 
         while (aeronCluster.offer(buffer, 0, length) < 0) {
 //            idleStrategy.idle(aeronCluster.pollEgress()); // TODO why poll?
             idleStrategy.idle(); // TODO why poll?
         }
 
-        log.info("Published");
+//        log.info("Published");
     }
 
 

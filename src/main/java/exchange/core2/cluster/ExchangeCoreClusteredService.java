@@ -1,13 +1,7 @@
 package exchange.core2.cluster;
 
-import exchange.core2.cluster.handlers.ExchangeRequestDecoders;
-import exchange.core2.cluster.handlers.ExchangeResponseEncoders;
-import exchange.core2.core.ExchangeApi;
-import exchange.core2.core.ExchangeCore;
-import exchange.core2.core.common.api.ApiCommand;
-import exchange.core2.core.common.cmd.OrderCommand;
-import exchange.core2.core.common.cmd.OrderCommandType;
-import exchange.core2.core.common.config.ExchangeConfiguration;
+import exchange.core2.cluster.handlers.MatchingEngine;
+import exchange.core2.orderbook.util.BufferWriter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.cluster.codecs.CloseReason;
@@ -15,16 +9,12 @@ import io.aeron.cluster.service.ClientSession;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusteredService;
 import io.aeron.logbuffer.Header;
-import org.agrona.BitUtil;
-import org.agrona.DirectBuffer;
-import org.agrona.ExpandableDirectByteBuffer;
-import org.agrona.MutableDirectBuffer;
+import org.agrona.*;
 import org.agrona.concurrent.IdleStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 
 public class ExchangeCoreClusteredService implements ClusteredService {
@@ -32,18 +22,16 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
     private final MutableDirectBuffer egressMessageBuffer = new ExpandableDirectByteBuffer(512);
     private IdleStrategy idleStrategy;
-    private final ExchangeCore exchangeCore = ExchangeCore.builder()
-            .exchangeConfiguration(ExchangeConfiguration.defaultBuilder().build())
-            .resultsConsumer((cmd, l) -> log.info("{}", cmd))
-            .build();
 
-    private final ExchangeApi exchangeApi = exchangeCore.getApi();
+    // correlationId is always written first, therefore set initial offset at SIZE_OF_LONG
+    private final BufferWriter bufferWriter = new BufferWriter(egressMessageBuffer, BitUtil.SIZE_OF_LONG);
+
+    private final MatchingEngine matchingEngine = new MatchingEngine(bufferWriter);
 
     @Override
     public void onStart(Cluster cluster, Image snapshotImage) {
         log.info("Cluster service started");
         this.idleStrategy = cluster.idleStrategy();
-        exchangeCore.startup();
     }
 
     @Override
@@ -58,55 +46,41 @@ public class ExchangeCoreClusteredService implements ClusteredService {
 
     @Override
     public void onSessionMessage(
-            ClientSession session,
-            long timestamp,
-            DirectBuffer buffer,
-            int offset,
-            int length,
-            Header header
-    ) {
-        log.info("Session message: {}", buffer);
+            final ClientSession session,
+            final long timestamp,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header) {
 
-        int currentOffset = offset;
-        long clientMessageId = buffer.getLong(currentOffset);
-        currentOffset += BitUtil.SIZE_OF_LONG;
+//        log.info(">>> NEW MESSAGE length={} offset={} CL-timestamp={}\n{}", length, offset, timestamp, PrintBufferUtil.prettyHexDump(buffer, offset, length));
 
-        OrderCommandType orderCommandType = OrderCommandType.fromCode(buffer.getByte(currentOffset));
-        currentOffset += BitUtil.SIZE_OF_BYTE;
+        final long correlationId = buffer.getLong(offset);
 
-        ApiCommand exchangeRequest = ExchangeRequestDecoders.decode(orderCommandType, buffer, currentOffset);
+//        log.debug("correlationId={}", correlationId);
 
-        if (exchangeRequest == null) {
-            log.info("Translator for OrderCommandType {} has not been implemented yet. Skipping.", orderCommandType);
-            return;
-        }
+        // call matching engine
+        matchingEngine.onMessage(buffer, offset + BitUtil.SIZE_OF_LONG, length - BitUtil.SIZE_OF_LONG);
 
         if (session != null) {
-            // |---long clientMessageId---|---byte responseType---|---int commandResult---|
-            // |---(optional) byte[] responseBody---|
-            CompletableFuture<OrderCommand> responseFuture = exchangeApi.submitCommandAsyncFullResponse(exchangeRequest);
-            OrderCommand exchangeResponse;
 
-            int currentEgressBufferOffset = 0;
-            egressMessageBuffer.putLong(currentEgressBufferOffset, clientMessageId);
-            currentEgressBufferOffset += BitUtil.SIZE_OF_LONG;
+            egressMessageBuffer.putLong(0, correlationId);
 
-            egressMessageBuffer.putByte(currentEgressBufferOffset, orderCommandType.getCode());
-            currentEgressBufferOffset += BitUtil.SIZE_OF_BYTE;
+            final int writerPosition = bufferWriter.getWriterPosition();
 
-            try {
-                exchangeResponse = responseFuture.get();
-            } catch (InterruptedException | ExecutionException e) {
-                log.error("Exception while completing response future occurred. Returning", e);
-                return;
-            }
+//            log.info("<<< Responding with (length={}) \n{}", writerPosition, PrintBufferUtil.prettyHexDump(egressMessageBuffer, 0, writerPosition));
 
-            ExchangeResponseEncoders.encode(exchangeResponse, egressMessageBuffer, currentEgressBufferOffset);
-            log.info("Responding with {}", egressMessageBuffer);
-            while (session.offer(egressMessageBuffer, 0, 512) < 0) {
+            // TODO can use tryClaim (without copy semantics)
+            while (session.offer(egressMessageBuffer, 0, writerPosition) < 0) {
                 idleStrategy.idle();
             }
+
+            // TODO remove
+            egressMessageBuffer.setMemory(0, writerPosition, (byte) 0);
+
         }
+
+        bufferWriter.reset();
     }
 
     @Override
@@ -127,5 +101,17 @@ public class ExchangeCoreClusteredService implements ClusteredService {
     @Override
     public void onTerminate(Cluster cluster) {
         log.info("In onTerminate: {}", cluster);
+    }
+
+    public void onNewLeadershipTermEvent(
+            long leadershipTermId,
+            long logPosition,
+            long timestamp,
+            long termBaseLogPosition,
+            int leaderMemberId,
+            int logSessionId,
+            TimeUnit timeUnit,
+            int appVersion) {
+        log.info("onNewLeadershipTermEvent: leadershipTermId={} logPosition={} leaderMemberId={}", leadershipTermId, logPosition, leaderMemberId);
     }
 }

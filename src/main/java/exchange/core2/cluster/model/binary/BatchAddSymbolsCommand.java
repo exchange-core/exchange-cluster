@@ -23,7 +23,7 @@ import org.eclipse.collections.impl.map.mutable.primitive.IntObjectHashMap;
 
 import java.util.Collection;
 
-public final class BatchAddSymbolsCommand implements BinaryDataCommand {
+public final class BatchAddSymbolsCommand implements BinaryDataCommand<BatchAddSymbolsResult> {
 
     private final IntObjectHashMap<CoreSymbolSpecification> symbols;
 

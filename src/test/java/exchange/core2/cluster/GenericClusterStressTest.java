@@ -10,7 +10,6 @@ import exchange.core2.cluster.model.CoreSymbolSpecification;
 import exchange.core2.cluster.model.binary.BatchAddSymbolsCommand;
 import exchange.core2.cluster.utils.SingleNodeTestingContainer;
 import exchange.core2.orderbook.IResponseHandler;
-import exchange.core2.orderbook.util.BufferReader;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,15 +69,15 @@ public class GenericClusterStressTest {
             final CoreSymbolSpecification spec = new CoreSymbolSpecification(symbolId);
 
             BatchAddSymbolsCommand binaryDataCommand = new BatchAddSymbolsCommand(Collections.singletonList(spec));
-            clusterClient.sendBinaryDataCommand(
+            clusterClient.sendBinaryDataCommandAsync(
                     0x2233_4455_6677_8899L,
                     System.nanoTime(),
                     binaryDataCommand);
 
 
-            sendCommands(symbolId, c, clusterClient, genResult.getCommandsFill());
+            cont.sendCommandsAsync(c, symbolId, genResult.getCommandsFill());
             final long startTimeMs = System.currentTimeMillis();
-            sendCommands(symbolId, c, clusterClient, genResult.getCommandsBenchmark());
+            cont.sendCommandsAsync(c, symbolId, genResult.getCommandsBenchmark());
 
             clusterClient.sendL2DataQueryAsync(
                     0xDEAL,
@@ -91,22 +90,6 @@ public class GenericClusterStressTest {
             final long timeMs = System.currentTimeMillis() - startTimeMs;
             float mps = (float) genResult.getNumCommandsBenchmark() / ((float) timeMs * 1000.0f);
             log.info("MPS: {}", String.format("%.3f", mps));
-        }
-    }
-
-    private void sendCommands(int symbolId,
-                              long c,
-                              ExchangeCoreClusterClient client,
-                              BufferReader commandsBuffer) {
-
-        while (commandsBuffer.getRemainingSize() > 0) {
-
-            client.placePreparedCommandAsync(
-                    0xDEADF00L + (c++ << 32),
-                    System.nanoTime(),
-                    symbolId,
-                    commandsBuffer);
-
         }
     }
 

@@ -26,7 +26,7 @@ public class StressTestClusterClient {
     public void performTest() {
         final CoreSymbolSpecification spec = new CoreSymbolSpecification(38001);
         BatchAddSymbolsCommand binaryDataCommand = new BatchAddSymbolsCommand(Collections.singletonList(spec));
-        clusterClient.sendBinaryDataCommand(
+        clusterClient.sendBinaryDataCommandAsync(
                 0x2233445566778899L,
                 System.nanoTime(),
                 binaryDataCommand);

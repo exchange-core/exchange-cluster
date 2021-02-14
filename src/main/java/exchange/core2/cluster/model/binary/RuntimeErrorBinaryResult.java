@@ -5,7 +5,7 @@ import exchange.core2.orderbook.util.*;
 public final class RuntimeErrorBinaryResult implements BinaryDataResult {
 
     @Override
-    public int getResultCode() {
+    public short getResultCode() {
         return -1;
     }
 

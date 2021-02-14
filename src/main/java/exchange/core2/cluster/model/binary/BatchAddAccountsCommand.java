@@ -18,15 +18,10 @@ package exchange.core2.cluster.model.binary;
 import exchange.core2.cluster.utils.SerializationUtils;
 import exchange.core2.orderbook.util.BufferReader;
 import exchange.core2.orderbook.util.BufferWriter;
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
 import org.eclipse.collections.impl.map.mutable.primitive.IntLongHashMap;
 import org.eclipse.collections.impl.map.mutable.primitive.LongObjectHashMap;
 
-@AllArgsConstructor
-@EqualsAndHashCode
-@Getter
+
 public final class BatchAddAccountsCommand implements BinaryDataCommand {
 
     private final LongObjectHashMap<IntLongHashMap> users;

@@ -43,7 +43,7 @@ public class GenericClusterIT {
 
             final CoreSymbolSpecification spec = new CoreSymbolSpecification(38001);
             BatchAddSymbolsCommand binaryDataCommand = new BatchAddSymbolsCommand(Collections.singletonList(spec));
-            clusterClient.sendBinaryDataCommand(
+            clusterClient.sendBinaryDataCommandAsync(
                     0x2233_4455_6677_8899L,
                     System.nanoTime(),
                     binaryDataCommand);

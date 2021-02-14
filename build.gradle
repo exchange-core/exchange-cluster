@@ -17,13 +17,14 @@ dependencies {
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
     compile group: 'org.eclipse.collections', name: 'eclipse-collections-api', version: '10.4.0'
     compile group: 'org.eclipse.collections', name: 'eclipse-collections', version: '10.4.0'
-    compile group: 'org.projectlombok', name: 'lombok', version: '1.18.12'
     compile group: 'com.google.guava', name: 'guava', version: '29.0-jre'
     compile group: 'com.sparkjava', name: 'spark-core', version: '2.9.2'
     compile group: 'info.picocli', name: 'picocli', version: '4.5.1'
+    compile group: 'net.openhft', name: 'affinity', version: '3.2.2'
+    compile group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
 
-    compile group: 'exchange.core2', name: 'orderbook', version: '0.7.23-SNAPSHOT'
-    testCompile group: 'exchange.core2', name: 'test-generator', version: '0.7.4-SNAPSHOT'
+    compile group: 'exchange.core2', name: 'orderbook', version: '0.7.24-SNAPSHOT'
+    testCompile group: 'exchange.core2', name: 'test-generator', version: '0.7.9-SNAPSHOT'
 
     annotationProcessor 'info.picocli:picocli-codegen:4.5.1'
 }

@@ -10,7 +10,6 @@ import exchange.core2.orderbook.util.BufferReader;
 import exchange.core2.orderbook.util.BufferWriter;
 import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
-import org.agrona.PrintBufferUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,6 +94,15 @@ public final class MatchingEngine {
                 onBinaryCommand(buffer, cmdCode, offset, length);
                 break;
 
+            case RESET:
+                reset();
+                sendSuccess(cmdCode);
+                break;
+
+            case NOP:
+                sendSuccess(cmdCode);
+                break;
+
             // TODO add more
 
             default:
@@ -108,7 +116,7 @@ public final class MatchingEngine {
         final IOrderBook<CoreSymbolSpecification> orderBook = new OrderBookNaiveImpl<>(
                 symbolSpecification, false, bufferWriter);
 
-        log.debug("Created orderbook: {}", symbolSpecification.getSymbolId());
+        //log.debug("Created orderbook: {}", symbolSpecification.getSymbolId());
 
         // TODO check uniqueness
         IOrderBook<CoreSymbolSpecification> prev = orderBooks.putIfAbsent(symbolSpecification.getSymbolId(), orderBook);
@@ -131,8 +139,8 @@ public final class MatchingEngine {
         final short binaryCommandCode = bufferReader.readShort();
 
 
+        //log.info("offset={} len={} binaryCommandCode={}", offset, length, binaryCommandCode);
 
-        log.info("offset={} len={} binaryCommandCode={}", offset, length, binaryCommandCode);
         final BinaryCommandType binCmd = BinaryCommandType.of(binaryCommandCode);
 
         final BinaryDataResult result;
@@ -141,7 +149,7 @@ public final class MatchingEngine {
                 final BatchAddSymbolsCommand cmd = new BatchAddSymbolsCommand(bufferReader);
                 bufferWriter.appendShort(cmd.getBinaryCommandTypeCode());
                 cmd.getSymbols().forEach(this::addOrderBook);
-                result = new BatchAddSymbolsResult(0);
+                result = new BatchAddSymbolsResult(IOrderBook.RESULT_SUCCESS);
 
                 break;
             case ADD_ACCOUNTS:
@@ -159,6 +167,16 @@ public final class MatchingEngine {
                                final int offset,
                                int length) {
 
+    }
+
+    private void reset() {
+        orderBooks.clear();
+    }
+
+    private void sendSuccess(byte cmdCode) {
+        bufferWriter.appendByte(cmdCode);
+        bufferWriter.appendInt(IOrderBook.RESULT_SUCCESS);
+        orderBooks.clear();
     }
 
 }

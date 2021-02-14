@@ -5,25 +5,25 @@ import exchange.core2.orderbook.util.BufferWriter;
 
 public final class BatchAddSymbolsResult implements BinaryDataResult {
 
-    private final int resultCode;
+    private final short resultCode;
     // TODO private final IntIntHashMap symbolResults;
 
-    public BatchAddSymbolsResult(int resultCode) {
+    public BatchAddSymbolsResult(short resultCode) {
         this.resultCode = resultCode;
     }
 
     public BatchAddSymbolsResult(final BufferReader bytes) {
-        resultCode = bytes.readInt();
+        resultCode = bytes.readShort();
     }
 
     @Override
-    public int getResultCode() {
+    public short getResultCode() {
         return resultCode;
     }
 
     @Override
     public void writeToBuffer(BufferWriter buffer) {
-        buffer.appendInt(resultCode);
+        buffer.appendShort(resultCode);
     }
 
     @Override
@@ -34,11 +34,11 @@ public final class BatchAddSymbolsResult implements BinaryDataResult {
     }
 
     public enum AddSymbolResultCodes {
-        SYMBOL_ALREADY_EXISTS(1);
+        SYMBOL_ALREADY_EXISTS((short)1);
 
-        private final int code;
+        private final short code;
 
-        AddSymbolResultCodes(int code) {
+        AddSymbolResultCodes(short code) {
             this.code = code;
         }
     }

@@ -55,7 +55,8 @@ public class ClientRunner implements Runnable {
                 clusterConfiguration,
                 clientEndpoint,
                 responseHandler,
-                true);
+                true,
+                63); // TODO specify client node index
 
         switch (serviceMode) {
             case REST_API:

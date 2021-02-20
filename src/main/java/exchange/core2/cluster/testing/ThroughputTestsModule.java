@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package exchange.core2.cluster.utils;
+package exchange.core2.cluster.testing;
 
 import exchange.core2.cluster.client.IgnoringResponseHandler;
 import exchange.core2.orderbook.IResponseHandler;
@@ -21,7 +21,7 @@ import exchange.core2.orderbook.util.BufferReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 public class ThroughputTestsModule {
@@ -29,21 +29,25 @@ public class ThroughputTestsModule {
     private static final Logger log = LoggerFactory.getLogger(ThroughputTestsModule.class);
 
     public static void throughputTestImpl(final TestDataParameters testDataParameters,
+                                          final Function<IResponseHandler, TestContainer> testContainerFactory,
                                           final int iterations) {
 
         final TestDataFutures testDataFutures = TestDataGenerationHelper.initiateTestDataGeneration(testDataParameters, 1);
 
         final IResponseHandler responseHandler = new IgnoringResponseHandler();
 
-        try (SingleNodeTestingContainer container = SingleNodeTestingContainer.create(responseHandler)) {
+        try (TestContainer container = testContainerFactory.apply(responseHandler)) {
 
-            final float avgMt = container.executeTestingThread(
+            final TestingHelperClient client = container.getTestingHelperClient();
+
+            final float avgMt = client.executeTestingThread(
                     () -> (float) IntStream.range(0, iterations)
                             .mapToObj(j -> {
-                                container.loadSymbolsClientsAndPreFillOrders(testDataFutures);
 
-                                final CompletableFuture<BufferReader> commandsBenchmark = testDataFutures.getGenResult().join().getCommandsBenchmark();
-                                final float perfMt = container.benchmarkMtps(commandsBenchmark.join());
+                                client.loadSymbolsClientsAndPreFillOrders(testDataFutures);
+
+                                final BufferReader commandsBenchmark = testDataFutures.getGenResult().join().getCommandsBenchmark().join();
+                                final float perfMt = client.benchmarkMtps(commandsBenchmark);
 
                                 log.info("{}. {} MT/s", j, String.format("%.3f", perfMt));
 
@@ -59,7 +63,7 @@ public class ThroughputTestsModule {
 
                                 // TODO compare events, balances, positions
 
-                                container.sendResetAsync();
+                                client.sendResetAsync();
 
                                 System.gc();
 

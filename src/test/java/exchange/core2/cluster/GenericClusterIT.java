@@ -4,7 +4,7 @@ import exchange.core2.cluster.client.ExchangeCoreClusterClient;
 import exchange.core2.cluster.client.LoggingResponseHandler;
 import exchange.core2.cluster.model.CoreSymbolSpecification;
 import exchange.core2.cluster.model.binary.BatchAddSymbolsCommand;
-import exchange.core2.cluster.utils.SingleNodeTestingContainer;
+import exchange.core2.cluster.testing.SingleNodeTestingContainer;
 import exchange.core2.orderbook.IOrderBook;
 import exchange.core2.orderbook.IResponseHandler;
 import exchange.core2.orderbook.OrderAction;

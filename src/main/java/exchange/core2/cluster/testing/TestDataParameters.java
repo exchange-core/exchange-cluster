@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package exchange.core2.cluster.utils;
+package exchange.core2.cluster.testing;
 
 
 import exchange.core2.benchmarks.generator.Constants;
@@ -82,7 +82,7 @@ public final class TestDataParameters {
 
         return new TestDataParameters(
                 10,
-                300_000,
+                1_000_000, // 1M,0.5M=0.3  230=0.38 M /// 0.07-0.11 MT/s
                 3_000,
                 10_000,
                 Constants.ALL_CURRENCIES,

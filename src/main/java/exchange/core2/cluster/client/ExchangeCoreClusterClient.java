@@ -207,7 +207,7 @@ public class ExchangeCoreClusterClient implements EgressListener {
     public void placePreparedCommandMultiSymAsync(final long correlationId,
                                                   final long timestamp,
                                                   final int symbolId,
-                                                  final byte cmd ,
+                                                  final byte cmd,
                                                   final BufferReader bufferReader) {
 
         bufferWriter.reset();
@@ -341,6 +341,9 @@ public class ExchangeCoreClusterClient implements EgressListener {
         sendToCluster(requestBuffer, offset);
     }
 
+    /**
+     * For sending no-arg commands like RESET, NOOP, etc
+     */
     public void sendNoArgsCommandAsync(final long correlationId,
                                        final long timestamp,
                                        final ExchangeCommandCode command) {

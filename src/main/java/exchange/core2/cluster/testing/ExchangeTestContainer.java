@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package exchange.core2.cluster.utils;
+package exchange.core2.cluster.testing;
 
 import org.eclipse.collections.impl.map.mutable.primitive.IntLongHashMap;
 

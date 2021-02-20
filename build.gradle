@@ -24,7 +24,7 @@ dependencies {
     compile group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
 
     compile group: 'exchange.core2', name: 'orderbook', version: '0.7.24-SNAPSHOT'
-    testCompile group: 'exchange.core2', name: 'test-generator', version: '0.7.9-SNAPSHOT'
+    compile group: 'exchange.core2', name: 'test-generator', version: '0.7.9-SNAPSHOT'
 
     annotationProcessor 'info.picocli:picocli-codegen:4.5.1'
 }

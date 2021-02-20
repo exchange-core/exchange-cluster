@@ -8,7 +8,8 @@ import exchange.core2.cluster.client.ExchangeCoreClusterClient;
 import exchange.core2.cluster.client.IgnoringResponseHandler;
 import exchange.core2.cluster.model.CoreSymbolSpecification;
 import exchange.core2.cluster.model.binary.BatchAddSymbolsCommand;
-import exchange.core2.cluster.utils.SingleNodeTestingContainer;
+import exchange.core2.cluster.testing.SingleNodeTestingContainer;
+import exchange.core2.cluster.testing.TestingHelperClient;
 import exchange.core2.orderbook.IResponseHandler;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -62,10 +63,10 @@ public class GenericClusterStressTest {
 
         long c = 0;
 
-        try (SingleNodeTestingContainer cont = SingleNodeTestingContainer.create(responseHandler)) {
+        try (final SingleNodeTestingContainer cont = SingleNodeTestingContainer.create(responseHandler)) {
 
             final ExchangeCoreClusterClient clusterClient = cont.getClusterClient();
-
+            final TestingHelperClient testingHelperClient = cont.getTestingHelperClient();
             final CoreSymbolSpecification spec = new CoreSymbolSpecification(symbolId);
 
             BatchAddSymbolsCommand binaryDataCommand = new BatchAddSymbolsCommand(Collections.singletonList(spec));
@@ -74,10 +75,9 @@ public class GenericClusterStressTest {
                     System.nanoTime(),
                     binaryDataCommand);
 
-
-            cont.sendCommandsAsync(c, symbolId, genResult.getCommandsFill());
+            testingHelperClient.sendCommandsAsync(c, symbolId, genResult.getCommandsFill());
             final long startTimeMs = System.currentTimeMillis();
-            cont.sendCommandsAsync(c, symbolId, genResult.getCommandsBenchmark());
+            testingHelperClient.sendCommandsAsync(c, symbolId, genResult.getCommandsBenchmark());
 
             clusterClient.sendL2DataQueryAsync(
                     0xDEAL,

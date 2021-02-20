@@ -1,4 +1,4 @@
-package exchange.core2.cluster.utils;
+package exchange.core2.cluster.testing;
 
 import exchange.core2.benchmarks.generator.GeneratorSymbolSpec;
 import exchange.core2.benchmarks.generator.clients.ClientsCurrencyAccountsGenerator;

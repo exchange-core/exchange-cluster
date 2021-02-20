@@ -38,7 +38,10 @@ public class ExchangeCoreCluster implements Runnable {
         log.info("Created {}", clusterConfiguration);
 
         final ShutdownSignalBarrier barrier = new ShutdownSignalBarrier();
-        final ExchangeCoreClusterNode clusterNode = new ExchangeCoreClusterNode(barrier, clusterConfiguration);
+        final ExchangeCoreClusterNode clusterNode = new ExchangeCoreClusterNode(
+                barrier,
+                clusterConfiguration,
+                Thread::new);
 
         clusterNode.start(nodeId, true);
 

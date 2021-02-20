@@ -19,23 +19,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-
-import static exchange.core2.cluster.utils.NetworkUtils.clusterMembers;
 
 public class ExchangeCoreClusterNode {
 
+    private final static Logger log = LoggerFactory.getLogger(ExchangeCoreClusterNode.class);
+
     private final ShutdownSignalBarrier barrier;
     private final ClusterConfiguration clusterConfiguration;
-    private final Logger log = LoggerFactory.getLogger(ExchangeCoreClusterNode.class);
+
+    private final ThreadFactory threadFactory;
 
     // todo initialize with factory (creator)
     private ClusteredServiceContainer container;
     private ClusteredMediaDriver clusteredMediaDriver;
 
-    public ExchangeCoreClusterNode(ShutdownSignalBarrier barrier, ClusterConfiguration clusterConfiguration) {
+    public ExchangeCoreClusterNode(final ShutdownSignalBarrier barrier,
+                                   final ClusterConfiguration clusterConfiguration,
+                                   final ThreadFactory threadFactory) {
         this.barrier = barrier;
         this.clusterConfiguration = clusterConfiguration;
+        this.threadFactory = threadFactory;
     }
 
 
@@ -43,7 +48,7 @@ public class ExchangeCoreClusterNode {
 
         return new ChannelUriStringBuilder()
                 .media("udp")
-                .termLength(64 * 1024)
+                .termLength(256 * 1024)
                 .endpoint(clusterConfiguration.getNodeEndpoint(nodeId, aeronServiceType))
                 .build();
     }
@@ -52,8 +57,8 @@ public class ExchangeCoreClusterNode {
 
         return new ChannelUriStringBuilder()
                 .media("udp")
-                .termLength(64 * 1024)
-                .controlMode("manual")
+                .termLength(256 * 1024)
+                .controlMode("manual") // TODO try dynamic
                 .controlEndpoint(clusterConfiguration.getNodeEndpoint(nodeId, aeronServiceType))
                 .build();
     }
@@ -74,6 +79,11 @@ public class ExchangeCoreClusterNode {
                 .aeronDirectoryName(aeronDir)
                 .threadingMode(ThreadingMode.SHARED)
                 .termBufferSparseFile(true)
+                .conductorThreadFactory(threadFactory)
+                .receiverThreadFactory(threadFactory)
+                .senderThreadFactory(threadFactory)
+                .sharedNetworkThreadFactory(threadFactory)
+                .sharedThreadFactory(threadFactory)
                 .multicastFlowControlSupplier(new MinMulticastFlowControlSupplier())
                 .terminationHook(() -> {
                     log.debug("terminationHook - SIGNAL...");
@@ -87,8 +97,10 @@ public class ExchangeCoreClusterNode {
         archiveContext
                 .archiveDir(new File(baseDir, "archive"))
                 .controlChannel(udpChannel(nodeId, AeronServiceType.ARCHIVE_CONTROL_REQUEST))
-                .localControlChannel("aeron:ipc?term-length=64k")
+                .localControlChannel("aeron:ipc?term-length=256k")
                 .recordingEventsEnabled(false)
+                .deleteArchiveOnStart(deleteOnStart)
+                .threadFactory(threadFactory)
                 .threadingMode(ArchiveThreadingMode.SHARED);
 
         final AeronArchive.Context aeronArchiveContext = new AeronArchive.Context();
@@ -111,9 +123,10 @@ public class ExchangeCoreClusterNode {
                 .clusterMembers(clusterMembers)
                 .aeronDirectoryName(aeronDir)
                 .clusterDir(new File(baseDir, "consensus-module"))
-                .ingressChannel("aeron:udp?term-length=64k")
+                .ingressChannel("aeron:udp?term-length=256k")
                 .logChannel(logControlChannel(nodeId, AeronServiceType.LOG_CONTROL))
                 .archiveContext(aeronArchiveContext.clone())
+                .threadFactory(threadFactory)
                 .deleteDirOnStart(deleteOnStart);
 
         // TODO provide
@@ -126,8 +139,8 @@ public class ExchangeCoreClusterNode {
                 .archiveContext(aeronArchiveContext.clone())
                 .clusterDir(new File(baseDir, "service"))
                 .clusteredService(service)
+                .threadFactory(threadFactory)
                 .errorHandler(Throwable::printStackTrace);
-
 
         clusteredMediaDriver = ClusteredMediaDriver.launch(
                 mediaDriverContext,

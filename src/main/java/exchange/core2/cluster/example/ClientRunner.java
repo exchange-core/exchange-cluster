@@ -1,11 +1,11 @@
 package exchange.core2.cluster.example;
 
 import exchange.core2.cluster.ExchangeCoreCluster;
-import exchange.core2.cluster.client.ExchangeCoreClusterClient;
-import exchange.core2.cluster.client.LoggingResponseHandler;
 import exchange.core2.cluster.conf.ClusterConfiguration;
 import exchange.core2.cluster.conf.ClusterConfigurationsFactory;
-import exchange.core2.orderbook.IResponseHandler;
+import exchange.core2.cluster.testing.RemoteClusterTestingContainer;
+import exchange.core2.cluster.testing.TestDataParameters;
+import exchange.core2.cluster.testing.ThroughputTestsModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -48,26 +48,32 @@ public class ClientRunner implements Runnable {
 
         log.info("clientEndpoint={}", clientEndpoint);
 
-        final IResponseHandler responseHandler = new LoggingResponseHandler();
-
-        final ExchangeCoreClusterClient clusterClient = new ExchangeCoreClusterClient(
-                aeronDirName,
-                clusterConfiguration,
-                clientEndpoint,
-                responseHandler,
-                true,
-                63); // TODO specify client node index
 
         switch (serviceMode) {
-            case REST_API:
-                final RestApiClusterClient restApi = new RestApiClusterClient(clusterClient);
-                restApi.registerRoutes();
-                break;
+//            case REST_API:
+//                final RestApiClusterClient restApi = new RestApiClusterClient(clusterClient);
+//                restApi.registerRoutes();
+//                break;
 
             case TESTING:
-                final StressTestClusterClient tester = new StressTestClusterClient(clusterClient);
-                tester.performTest();
+                final StressTestClusterClient tester = new StressTestClusterClient(aeronDirName, clusterConfiguration, clientEndpoint);
+                tester.performSimpleTest();
+                tester.shutdown();
                 break;
+
+            case STRESS_SMALL:
+                ThroughputTestsModule.throughputTestImpl(
+                        TestDataParameters.small(),
+                        responseHandler -> RemoteClusterTestingContainer.create(
+                                responseHandler,
+                                clientEndpoint,
+                                aeronDirName,
+                                clusterConfiguration),
+                        10);
+                break;
+
+            default:
+                throw new UnsupportedOperationException("serviceMode " + serviceMode + " is not supported");
         }
 
 
@@ -79,6 +85,9 @@ public class ClientRunner implements Runnable {
 
     public enum ServiceMode {
         REST_API,
-        TESTING
+        TESTING,
+        STRESS_SMALL,
+        STRESS_MEDIUM,
+        STRESS_LARGE
     }
 }

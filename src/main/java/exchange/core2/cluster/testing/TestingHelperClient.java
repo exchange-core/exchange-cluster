@@ -1,88 +1,43 @@
-package exchange.core2.cluster.utils;
+package exchange.core2.cluster.testing;
 
 import com.google.common.collect.Lists;
 import exchange.core2.benchmarks.generator.GeneratorSymbolSpec;
 import exchange.core2.benchmarks.generator.orders.MultiSymbolGenResult;
 import exchange.core2.benchmarks.generator.util.ExecutionTime;
-import exchange.core2.cluster.ExchangeCoreClusterNode;
-import exchange.core2.cluster.GenericClusterIT;
 import exchange.core2.cluster.client.ExchangeCoreClusterClient;
-import exchange.core2.cluster.conf.ClusterConfiguration;
-import exchange.core2.cluster.conf.ClusterLocalConfiguration;
 import exchange.core2.cluster.model.CoreSymbolSpecification;
 import exchange.core2.cluster.model.ExchangeCommandCode;
 import exchange.core2.cluster.model.binary.BatchAddSymbolsCommand;
 import exchange.core2.cluster.model.binary.BinaryDataCommand;
 import exchange.core2.cluster.model.binary.BinaryDataResult;
+import exchange.core2.cluster.utils.AffinityThreadFactory;
 import exchange.core2.orderbook.IOrderBook;
-import exchange.core2.orderbook.IResponseHandler;
 import exchange.core2.orderbook.util.BufferReader;
-import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.apache.commons.math3.util.Pair;
-import org.hamcrest.core.Is;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
-import static org.hamcrest.MatcherAssert.assertThat;
+public class TestingHelperClient {
 
-public final class SingleNodeTestingContainer implements TestContainer {
-
-    private static final Logger log = LoggerFactory.getLogger(GenericClusterIT.class);
+    private static final Logger log = LoggerFactory.getLogger(TestingHelperClient.class);
 
     private final ExchangeCoreClusterClient clusterClient;
-    private final ExchangeCoreClusterNode clusterNode;
+    private final AffinityThreadFactory threadFactory;
 
-    private final AffinityThreadFactory threadFactory = new AffinityThreadFactory(
-            AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_LOGICAL_CORE);
+    public TestingHelperClient(ExchangeCoreClusterClient clusterClient) {
 
-    private static final String CLIENT_ENDPOINT_LOCAL_HOST = "localhost:19001";
+        // TODO fix
+        this.threadFactory = new AffinityThreadFactory(AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_LOGICAL_CORE);
 
-    public static SingleNodeTestingContainer create(final IResponseHandler responseHandler) {
-
-        log.info("Initializing cluster configuration...");
-        final ClusterConfiguration clusterConfiguration = new ClusterLocalConfiguration(1);
-
-        log.info("Created {}", clusterConfiguration);
-
-        final ShutdownSignalBarrier barrier = new ShutdownSignalBarrier();
-        final ExchangeCoreClusterNode clusterNode = new ExchangeCoreClusterNode(barrier, clusterConfiguration);
-
-        clusterNode.start(0, true);
-
-        final String aeronDirName = new File(System.getProperty("client.dir"), "aeron-cluster-client").getAbsolutePath();
-
-        final ExchangeCoreClusterClient clusterClient = new ExchangeCoreClusterClient(
-                aeronDirName,
-                clusterConfiguration,
-                CLIENT_ENDPOINT_LOCAL_HOST,
-                responseHandler,
-                true,
-                1);
-
-
-        return new SingleNodeTestingContainer(clusterClient, clusterNode);
-    }
-
-    private SingleNodeTestingContainer(ExchangeCoreClusterClient clusterClient, ExchangeCoreClusterNode clusterNode) {
         this.clusterClient = clusterClient;
-        this.clusterNode = clusterNode;
-    }
-
-    public ExchangeCoreClusterClient getClusterClient() {
-        return clusterClient;
-    }
-
-    public ExchangeCoreClusterNode getClusterNode() {
-        return clusterNode;
     }
 
 
-    public void loadSymbolsClientsAndPreFillOrders(TestDataFutures testDataFutures) {
+    public void loadSymbolsClientsAndPreFillOrders(final TestDataFutures testDataFutures) {
 
         // load symbols
 
@@ -123,6 +78,23 @@ public final class SingleNodeTestingContainer implements TestContainer {
 //        getApi().submitCommandsSync(testDataFutures.genResult.join().getApiCommandsFill().join());
 //    }
 
+
+    public <R extends BinaryDataResult> void sendBinaryDataCommandSync(final BinaryDataCommand<R> data,
+                                                                       final int timeOutMs) {
+
+        final Future<R> future = clusterClient.sendCommandSync(data);
+
+        try {
+            final short resultCode = future.get(timeOutMs, TimeUnit.MILLISECONDS).getResultCode();
+            if (resultCode != IOrderBook.RESULT_SUCCESS) {
+                throw new RuntimeException("Unexpected resultCode=" + resultCode);
+            }
+        } catch (final InterruptedException | ExecutionException | TimeoutException ex) {
+            log.error("Failed sending binary data command", ex);
+            throw new RuntimeException(ex);
+        }
+    }
+
     public void addSymbols(final List<Pair<GeneratorSymbolSpec, Double>> symbolSpecs) {
         // split by chunks
         Lists.partition(symbolSpecs, 64).forEach(
@@ -140,15 +112,6 @@ public final class SingleNodeTestingContainer implements TestContainer {
 
     }
 
-    public <R extends BinaryDataResult> void sendBinaryDataCommandSync(final BinaryDataCommand<R> data, final int timeOutMs) {
-        final Future<R> future = clusterClient.sendCommandSync(data);
-        try {
-            assertThat(future.get(timeOutMs, TimeUnit.MILLISECONDS).getResultCode(), Is.is(IOrderBook.RESULT_SUCCESS));
-        } catch (final InterruptedException | ExecutionException | TimeoutException ex) {
-            log.error("Failed sending binary data command", ex);
-            throw new RuntimeException(ex);
-        }
-    }
 
     // TODO change to sync
     public int sendMultiSymbolGenCommandsAsync(long c,
@@ -199,6 +162,13 @@ public final class SingleNodeTestingContainer implements TestContainer {
         clusterClient.sendNoArgsCommandAsync(1, 0, ExchangeCommandCode.RESET);
     }
 
+    public float benchmarkMtps(final BufferReader apiCommandsBenchmark) {
+        final long tStart = System.currentTimeMillis();
+        final int commandsNum = sendMultiSymbolGenCommandsAsync(0L, apiCommandsBenchmark);
+        final long tDuration = System.currentTimeMillis() - tStart;
+        return commandsNum / (float) tDuration / 1000.0f;
+    }
+
     /**
      * Run test using threads factory.
      * This is needed for correct cpu pinning.
@@ -228,22 +198,5 @@ public final class SingleNodeTestingContainer implements TestContainer {
         });
     }
 
-    public float benchmarkMtps(final BufferReader apiCommandsBenchmark) {
-        final long tStart = System.currentTimeMillis();
-        final int commandsNum = sendMultiSymbolGenCommandsAsync(0L, apiCommandsBenchmark);
-        final long tDuration = System.currentTimeMillis() - tStart;
-        return commandsNum / (float) tDuration / 1000.0f;
-    }
 
-    @Override
-    public void close() {
-
-        clusterClient.shutdown();
-
-        clusterNode.stop();
-
-        //log.debug("await...");
-        //barrier.await();
-        //log.debug("after await");
-    }
 }

@@ -82,7 +82,7 @@ public final class TestDataParameters {
 
         return new TestDataParameters(
                 10,
-                1_000_000, // 1M,0.5M=0.3  230=0.38 M /// 0.07-0.11 MT/s
+                100_000, // 1M,0.5M=0.3  230=0.38 M /// 0.07-0.11 MT/s
                 3_000,
                 10_000,
                 Constants.ALL_CURRENCIES,
@@ -102,7 +102,7 @@ public final class TestDataParameters {
 
         return new TestDataParameters(
                 32,
-                3_000_000,
+                1_000_000,
                 1_000_000,
                 3_300_000,
                 Constants.ALL_CURRENCIES,

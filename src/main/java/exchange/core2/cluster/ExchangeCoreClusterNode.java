@@ -26,6 +26,8 @@ public class ExchangeCoreClusterNode {
 
     private final static Logger log = LoggerFactory.getLogger(ExchangeCoreClusterNode.class);
 
+    private static final String ARCHIVE_REPLICATION_CHANNEL = "aeron:ipc";
+
     private final ShutdownSignalBarrier barrier;
     private final ClusterConfiguration clusterConfiguration;
 
@@ -53,14 +55,27 @@ public class ExchangeCoreClusterNode {
                 .build();
     }
 
-    private String logControlChannel(final int nodeId, final AeronServiceType aeronServiceType) {
+    private String logControlChannel(final int nodeId) {
 
         return new ChannelUriStringBuilder()
                 .media("udp")
                 .termLength(256 * 1024)
                 .controlMode("manual") // TODO try dynamic
-                .controlEndpoint(clusterConfiguration.getNodeEndpoint(nodeId, aeronServiceType))
+                .controlEndpoint(clusterConfiguration.getNodeEndpoint(nodeId, AeronServiceType.LOG_CONTROL))
                 .build();
+    }
+
+    /**
+     * Specify the replication channel. This channel is the one that the local archive for a node will receive replication responses from
+     * other archives when the log or snapshot replication step is required. This was added in version 1.33.0 and is a required parameter.
+     * It is important in a production environment that this channel’s endpoint is not set to localhost, but instead a hostname/ip address
+     * that is reachable by the other nodes in the cluster.
+     */
+    private  String logReplicationChannel(final int nodeId) {
+        return new ChannelUriStringBuilder()
+            .media("udp")
+            .endpoint(clusterConfiguration.getNodeEndpoint(nodeId, AeronServiceType.REPLICATION_CHANNEL))
+            .build();
     }
 
     public void start(final int nodeId, final boolean deleteOnStart) {
@@ -73,9 +88,7 @@ public class ExchangeCoreClusterNode {
         log.info("Aeron Dir = {}", aeronDir);
         log.info("Cluster Dir = {}", baseDir);
 
-        final MediaDriver.Context mediaDriverContext = new MediaDriver.Context();
-
-        mediaDriverContext
+        final MediaDriver.Context mediaDriverContext = new MediaDriver.Context()
                 .aeronDirectoryName(aeronDir)
                 .threadingMode(ThreadingMode.SHARED)
                 .termBufferSparseFile(true)
@@ -92,27 +105,26 @@ public class ExchangeCoreClusterNode {
                 .dirDeleteOnStart(deleteOnStart);
 
 
-        final Archive.Context archiveContext = new Archive.Context();
-
-        archiveContext
+        final Archive.Context archiveContext = new Archive.Context()
                 .archiveDir(new File(baseDir, "archive"))
                 .controlChannel(udpChannel(nodeId, AeronServiceType.ARCHIVE_CONTROL_REQUEST))
                 .localControlChannel("aeron:ipc?term-length=256k")
                 .recordingEventsEnabled(false)
                 .deleteArchiveOnStart(deleteOnStart)
                 .threadFactory(threadFactory)
-                .threadingMode(ArchiveThreadingMode.SHARED);
+                .threadingMode(ArchiveThreadingMode.SHARED)
+                .replicationChannel(ARCHIVE_REPLICATION_CHANNEL);
 
-        final AeronArchive.Context aeronArchiveContext = new AeronArchive.Context();
-
-        aeronArchiveContext
+        final AeronArchive.Context aeronArchiveContext = new AeronArchive.Context()
                 .lock(NoOpLock.INSTANCE)
-                .controlRequestChannel(archiveContext.controlChannel())
+                .controlRequestChannel(archiveContext.localControlChannel())
                 .controlRequestStreamId(archiveContext.controlStreamId())
-                .controlResponseChannel(udpChannel(nodeId, AeronServiceType.ARCHIVE_CONTROL_RESPONSE))
+                .controlResponseChannel(archiveContext.localControlChannel())
                 .aeronDirectoryName(aeronDir);
 
+
         final String clusterMembers = NetworkUtils.clusterMembers(clusterConfiguration);
+        log.info("clusterMembers: {}", clusterMembers);
 
         final ConsensusModule.Context consensusModuleContext = new ConsensusModule.Context();
 
@@ -124,7 +136,8 @@ public class ExchangeCoreClusterNode {
                 .aeronDirectoryName(aeronDir)
                 .clusterDir(new File(baseDir, "consensus-module"))
                 .ingressChannel("aeron:udp?term-length=256k")
-                .logChannel(logControlChannel(nodeId, AeronServiceType.LOG_CONTROL))
+                .logChannel(logControlChannel(nodeId))
+                .replicationChannel(logReplicationChannel(nodeId))
                 .archiveContext(aeronArchiveContext.clone())
                 .threadFactory(threadFactory)
                 .deleteDirOnStart(deleteOnStart);

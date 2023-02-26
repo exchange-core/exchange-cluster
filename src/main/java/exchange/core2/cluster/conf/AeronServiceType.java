@@ -8,7 +8,8 @@ public enum AeronServiceType {
     MEMBER_FACING(4),
     LOG(5),
     TRANSFER(6),
-    LOG_CONTROL(7);
+    LOG_CONTROL(7),
+    REPLICATION_CHANNEL(8);
 
     private final int portOffset;
 

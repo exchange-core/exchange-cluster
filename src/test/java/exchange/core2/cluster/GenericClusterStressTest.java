@@ -8,7 +8,7 @@ import exchange.core2.cluster.client.ExchangeCoreClusterClient;
 import exchange.core2.cluster.client.IgnoringResponseHandler;
 import exchange.core2.cluster.model.CoreSymbolSpecification;
 import exchange.core2.cluster.model.binary.BatchAddSymbolsCommand;
-import exchange.core2.cluster.testing.SingleNodeTestingContainer;
+import exchange.core2.cluster.testing.LocalTestingContainer;
 import exchange.core2.cluster.testing.TestingHelperClient;
 import exchange.core2.orderbook.IResponseHandler;
 import org.junit.Test;
@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
+import static exchange.core2.cluster.testing.LocalTestingContainer.ClusterNodesMode.SINGLE_NODE;
 import static org.junit.Assert.assertTrue;
 
 public class GenericClusterStressTest {
@@ -63,7 +64,7 @@ public class GenericClusterStressTest {
 
         long c = 0;
 
-        try (final SingleNodeTestingContainer cont = SingleNodeTestingContainer.create(responseHandler)) {
+        try (final LocalTestingContainer cont = LocalTestingContainer.create(responseHandler, SINGLE_NODE)) {
 
             final ExchangeCoreClusterClient clusterClient = cont.getClusterClient();
             final TestingHelperClient testingHelperClient = cont.getTestingHelperClient();

@@ -32,19 +32,30 @@ public class TestingHelperClient {
 
         // TODO fix
         this.threadFactory = new AffinityThreadFactory(AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_LOGICAL_CORE);
-
         this.clusterClient = clusterClient;
     }
 
 
+    public ExchangeCoreClusterClient getClusterClient() {
+        return clusterClient;
+    }
+
     public void loadSymbolsClientsAndPreFillOrders(final TestDataFutures testDataFutures) {
+        loadSymbolsClientsAndPreFillOrders(testDataFutures, false);
+    }
+
+    public void loadSymbolsClientsAndPreFillOrders(final TestDataFutures testDataFutures, boolean enableLogging) {
 
         // load symbols
 
         final List<Pair<GeneratorSymbolSpec, Double>> symbolSpecs = testDataFutures.getSymbolSpecs().join();
 
-        log.info("Loading {} symbols...", symbolSpecs.size());
-        try (ExecutionTime ignore = new ExecutionTime(t -> log.debug("Loaded all symbols in {}", t))) {
+        if (enableLogging) {
+            log.info("Loading {} symbols...", symbolSpecs.size());
+            try (ExecutionTime ignore = new ExecutionTime(t -> log.debug("Loaded all symbols in {}", t))) {
+                addSymbols(symbolSpecs);
+            }
+        } else {
             addSymbols(symbolSpecs);
         }
 
@@ -58,9 +69,13 @@ public class TestingHelperClient {
         final MultiSymbolGenResult genResult = testDataFutures.getGenResult().join();
 
         final BufferReader commandsFill = genResult.getCommandsFill().join();
-        log.info("Order books pre-fill with orders ({} KB)...", commandsFill.getSize() / 1024);
 
-        try (ExecutionTime ignore = new ExecutionTime(t -> log.debug("Order books pre-fill completed in {}", t))) {
+        if (enableLogging) {
+            log.info("Order books pre-fill with orders ({} KB)...", commandsFill.getSize() / 1024);
+            try (ExecutionTime ignore = new ExecutionTime(t -> log.debug("Order books pre-fill completed in {}", t))) {
+                sendMultiSymbolGenCommandsAsync(0, commandsFill);
+            }
+        } else {
             sendMultiSymbolGenCommandsAsync(0, commandsFill);
         }
 

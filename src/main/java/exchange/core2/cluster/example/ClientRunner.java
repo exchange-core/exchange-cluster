@@ -3,6 +3,7 @@ package exchange.core2.cluster.example;
 import exchange.core2.cluster.ExchangeCoreCluster;
 import exchange.core2.cluster.conf.ClusterConfiguration;
 import exchange.core2.cluster.conf.ClusterConfigurationsFactory;
+import exchange.core2.cluster.testing.LatencyTestsModule;
 import exchange.core2.cluster.testing.RemoteClusterTestingContainer;
 import exchange.core2.cluster.testing.TestDataParameters;
 import exchange.core2.cluster.testing.ThroughputTestsModule;
@@ -61,7 +62,7 @@ public class ClientRunner implements Runnable {
                 tester.shutdown();
                 break;
 
-            case STRESS_SMALL:
+            case THROUGHPUT_S:
                 ThroughputTestsModule.throughputTestImpl(
                         TestDataParameters.small(),
                         responseHandler -> RemoteClusterTestingContainer.create(
@@ -70,6 +71,39 @@ public class ClientRunner implements Runnable {
                                 aeronDirName,
                                 clusterConfiguration),
                         10);
+                break;
+
+            case THROUGHPUT_M:
+                ThroughputTestsModule.throughputTestImpl(
+                        TestDataParameters.medium(),
+                        responseHandler -> RemoteClusterTestingContainer.create(
+                                responseHandler,
+                                clientEndpoint,
+                                aeronDirName,
+                                clusterConfiguration),
+                        10);
+                break;
+
+            case LATENCY_S:
+                LatencyTestsModule.latencyTestImpl(
+                        TestDataParameters.small(),
+                        responseHandler -> RemoteClusterTestingContainer.create(
+                                responseHandler,
+                                clientEndpoint,
+                                aeronDirName,
+                                clusterConfiguration),
+                        5);
+                break;
+
+            case LATENCY_M:
+                LatencyTestsModule.latencyTestImpl(
+                        TestDataParameters.medium(),
+                        responseHandler -> RemoteClusterTestingContainer.create(
+                                responseHandler,
+                                clientEndpoint,
+                                aeronDirName,
+                                clusterConfiguration),
+                        5);
                 break;
 
             default:
@@ -86,8 +120,10 @@ public class ClientRunner implements Runnable {
     public enum ServiceMode {
         REST_API,
         TESTING,
-        STRESS_SMALL,
-        STRESS_MEDIUM,
-        STRESS_LARGE
+        THROUGHPUT_S,
+        THROUGHPUT_M,
+        THROUGHPUT_L,
+        LATENCY_S,
+        LATENCY_M
     }
 }

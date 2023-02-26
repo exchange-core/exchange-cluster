@@ -11,8 +11,9 @@ repositories {
 }
 
 dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.13.1'
-    compile group: 'io.aeron', name: 'aeron-all', version: '1.31.0'
+    compile group: 'io.aeron', name: 'aeron-all', version: '1.40.0'
+    compile group: 'org.agrona', name: 'agrona', version: '1.17.1'
+    compile group: 'org.hdrhistogram', name: 'HdrHistogram', version: '2.1.12'
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.30'
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
     compile group: 'org.eclipse.collections', name: 'eclipse-collections-api', version: '10.4.0'
@@ -25,6 +26,8 @@ dependencies {
 
     compile group: 'exchange.core2', name: 'orderbook', version: '0.7.24-SNAPSHOT'
     compile group: 'exchange.core2', name: 'test-generator', version: '0.7.9-SNAPSHOT'
+
+    testCompile group: 'junit', name: 'junit', version: '4.13.1'
 
     annotationProcessor 'info.picocli:picocli-codegen:4.5.1'
 }

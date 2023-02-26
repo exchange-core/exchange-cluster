@@ -6,8 +6,7 @@ import exchange.core2.cluster.conf.ClusterConfiguration;
 
 public class NetworkUtils {
 
-    public static String
-    ingressEndpoints(final ClusterConfiguration conf) {
+    public static String ingressEndpoints(final ClusterConfiguration conf) {
         final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < conf.getTotalNodes(); i++) {
             sb.append(i).append('=');

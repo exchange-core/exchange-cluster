@@ -17,6 +17,7 @@ public class ClusterConfigurationsFactory {
     private static final String DEFAULT_PROPERTIES_FILENAME = "exchange-cluster-default.properties";
 
 
+    // TODO simplify, provide as string parameter
     public static ClusterConfiguration createClusterConfiguration(final ExchangeCoreCluster.ConfigurationType configurationType,
                                                                   final int totalNodes,
                                                                   final String propertiesFilename) {
